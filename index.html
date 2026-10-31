@@ -245,6 +245,8 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 .prov button{height:36px;width:auto;padding:0 16px;flex:none;background:var(--ok);border-color:var(--ok-ring);color:#fff}
 .prov.off{opacity:.55}
 .sr-credit{margin:14px 0 0;font-size:11px}
+.sr-tv{width:100%;margin:10px 0 2px;font-weight:600}
+#srHint{margin:2px 0 0}
 /* search bar stays pinned at the top of its panel */
 #searchForm{position:sticky;top:-10px;z-index:2;background:var(--sheet);padding:10px 0 8px;margin-top:-10px}
 #toast{
@@ -763,9 +765,9 @@ const IMG = 'https://image.tmdb.org/t/p/';
 const showSearchOn = () => !!cfg.tmdb;
 let srTimer = 0, srSeq = 0;
 function srSetup(){
-  $('#srHint').textContent = showSearchOn() ? '' :
-    'Results open on your TV. Add a TMDB key to secrets.json to search shows and movies here instead.';
-  $('#srHint').hidden = showSearchOn();
+  $('#srHint').textContent = showSearchOn()
+    ? 'Type to see where it\u2019s streaming. Press Search to show results on your TV.'
+    : 'Results open on your TV. Add a TMDB key to secrets.json to search shows and movies here too.';
   $('#srCredit').hidden = !showSearchOn();
 }
 function srBack(){ $('#srDetail').hidden = true; $('#srMain').hidden = false; }
@@ -777,8 +779,9 @@ $('#searchForm').addEventListener('submit', e => {
   e.preventDefault();
   const q = $('#searchQ').value.trim();
   if(!q) return;
-  if(showSearchOn()){ $('#searchQ').blur(); clearTimeout(srTimer); runSearch(q); return; }
-  buzz(); queue('/api/search', { q }); closeSheets();
+  searchOnTv(q);
+  if(showSearchOn()){ $('#searchQ').blur(); clearTimeout(srTimer); runSearch(q); return; }   // keep the listings here too
+  closeSheets();
 });
 $('#searchQ').addEventListener('input', () => {        // results update as you type
   if(!showSearchOn()) return;
@@ -787,6 +790,12 @@ $('#searchQ').addEventListener('input', () => {        // results update as you 
   if(!q){ srSeq++; $('#srResults').innerHTML = ''; return; }
   srTimer = setTimeout(() => runSearch(q), 350);
 });
+/* Roku's own search screen on the TV: its results link straight into each app */
+function searchOnTv(q){
+  if(!state.ip) return toast('No Roku selected');
+  buzz(); queue('/api/search', { q });
+  toast(`Showing \u201c${q}\u201d on your TV`);
+}
 async function runSearch(q){
   const seq = ++srSeq, list = $('#srResults');
   if(!list.children.length) list.innerHTML = '<p class="muted">Searching…</p>';
@@ -849,8 +858,11 @@ async function showDetail(r){
   const ov = document.createElement('p'); ov.className = 'sr-ov'; ov.textContent = r.overview || '';
   info.append(h, sub, ov);
   head.append(posterImg(r.poster, 'w185', 'sr-big'), info);
+  const tv = document.createElement('button'); tv.className = 'sr-tv';
+  tv.innerHTML = '<svg width="18" height="18"><use href="#i-search"/></svg> Show on TV';
+  tv.addEventListener('click', () => { searchOnTv(r.title); closeSheets(); });
   const where = document.createElement('div'); where.innerHTML = '<p class="muted">Finding where to watch…</p>';
-  d.append(back, head, where);
+  d.append(back, head, tv, where);
   d.scrollIntoView({ block: 'start' });
   try{
     const [prov, apps] = await Promise.all([api(`/api/tmdb/providers?type=${r.type}&id=${r.id}`), installedApps()]);
