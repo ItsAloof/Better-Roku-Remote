@@ -28,6 +28,7 @@ ECP_PORT = 8060
 HERE = os.path.dirname(os.path.abspath(__file__))
 INDEX = os.path.join(HERE, "index.html")
 FAKE_TV = os.path.join(HERE, "fake-roku.html")   # the virtual Roku TV screen (/?fake-roku)
+DESKTOP = os.path.join(HERE, "desktop.html")    # the computer layout (/desktop)
 CONFIG = os.path.join(HERE, "config.json")   # themes + defaults, re-read on every page load
 
 KEYS = {
@@ -261,8 +262,9 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         q = parse_qs(url.query, keep_blank_values=True)
 
-        if url.path in ("/", "/index.html", "/fake-roku"):
-            page = FAKE_TV if (url.path == "/fake-roku" or "fake-roku" in q) else INDEX
+        if url.path in ("/", "/index.html", "/fake-roku", "/desktop"):
+            page = (FAKE_TV if (url.path == "/fake-roku" or "fake-roku" in q)
+                    else DESKTOP if url.path == "/desktop" else INDEX)
             try:
                 with open(page, "rb") as f:
                     body = f.read()

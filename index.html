@@ -13,6 +13,15 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <script>
+  // Computers get the desktop layout (/desktop) unless they picked the phone layout.
+  (() => {
+    const qs = new URLSearchParams(location.search);
+    let pref = null; try{ pref = localStorage.getItem('roku.view'); }catch(e){}
+    if(qs.has('mobile')){ try{ localStorage.setItem('roku.view', 'mobile'); }catch(e){} return; }
+    const app = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+    const computer = matchMedia('(hover: hover) and (pointer: fine)').matches && Math.min(screen.width, screen.height) >= 700;
+    if(!app && (pref === 'desktop' || (pref !== 'mobile' && computer))) location.replace('/desktop');
+  })();
   // Home-screen app: draw edge to edge (gradient behind the clock), padded by safe areas.
   // In Safari itself we leave the bars alone so nothing gets covered.
   if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) {
@@ -360,6 +369,7 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
   <label class="tog"><span>Animations</span><input type="checkbox" switch id="animTog"></label>
   <label class="tog"><span>Haptics</span><input type="checkbox" switch id="hapTog"></label>
   <p class="small muted">Themes and defaults come from config.json next to the server script.</p>
+  <p class="small"><a href="/desktop" id="deskLink" style="color:var(--ok-ring)">Switch to the desktop layout</a></p>
 </div>
 
 <div class="sheet" id="searchSheet">
@@ -1116,6 +1126,8 @@ if(window.visualViewport){
 document.addEventListener('focusin', e => {
   if(e.target.closest && e.target.closest('.sheet')) setTimeout(() => { window.scrollTo(0, 0); fitSheet(); }, 50);
 });
+
+$('#deskLink').addEventListener('click', () => store.set('roku.view', 'desktop'));
 
 /* ---------- start ---------- */
 loadConfig();

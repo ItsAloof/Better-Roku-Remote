@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0418">
+<title>Remote+</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0a0418; --glow:#2c0f66;
+  --btn:rgba(255,255,255,.06); --btn-hi:rgba(255,255,255,.16); --edge:rgba(255,255,255,.13);
+  --text:#f3f0fb; --muted:#a59cbf;
+  --pad-top:#6b33dc; --pad-bot:#3a1092; --pad-hi:#8a58f2; --gap:#120628;
+  --ok:#5a24c4; --ok-ring:#b9a0ff; --good:#3ecf8e; --bad:#ff5d73; --sheet:#1a0d36;
+  --remote-w:340px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  color:var(--text);overflow:hidden;
+  background:radial-gradient(120% 80% at 40% 40%, var(--glow) 0%, var(--bg) 100%) fixed;
+  transition:background .4s;
+  font:15px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+button{font:inherit;color:inherit;cursor:pointer;background:var(--btn);border:1px solid var(--edge);border-radius:12px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:background .1s,transform .1s,box-shadow .15s}
+button:hover{background:rgba(255,255,255,.1)}
+button.on,button:active{background:var(--btn-hi);transform:scale(.96)}
+button svg{pointer-events:none;flex:none}
+input,select{font:inherit;color:var(--text)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+/* ---------- page layout ---------- */
+.page{position:relative;z-index:1;height:100%;display:grid;grid-template-rows:auto 1fr}
+header{display:flex;align-items:center;gap:16px;padding:16px 28px;border-bottom:1px solid var(--edge);background:rgba(0,0,0,.18);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;white-space:nowrap}
+.brand img{width:32px;height:32px;border-radius:8px}
+.devpick{display:flex;align-items:center;gap:8px;background:var(--btn);border:1px solid var(--edge);border-radius:12px;padding:0 6px 0 12px;height:42px}
+.devpick select{background:none;border:0;height:40px;font-weight:600;max-width:220px;cursor:pointer;outline:none}
+.devpick select option{background:#1a1030}
+.devpick button{width:32px;height:32px;border:0;background:none;border-radius:8px}
+.devpick .star.on{color:#ffd257}
+.devpick .star.on svg{fill:#ffd257}
+.devpick .star svg{fill:none;stroke:currentColor;stroke-width:1.8}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--good)} .dot.err{background:var(--bad)}
+.np{display:flex;align-items:center;gap:12px;min-width:0;flex:1;max-width:420px;padding:6px 14px 6px 6px;border-radius:12px;background:var(--btn);border:1px solid var(--edge)}
+.np[hidden]{display:none}
+.np img{width:56px;height:42px;object-fit:cover;border-radius:7px;background:#000;flex:none}
+.np-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.np-top{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+#npApp{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#npTime{color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.np-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}
+#npFill{height:100%;width:0;background:var(--ok-ring);transition:width .9s linear}
+.np.nobar .np-bar{display:none}
+.spacer{flex:1}
+.search{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border-radius:12px;background:var(--btn);border:1px solid var(--edge);width:280px}
+.search input{flex:1;min-width:0;background:none;border:0;outline:none;height:40px}
+.search kbd{font:12px/1 inherit;color:var(--muted);border:1px solid var(--edge);border-radius:5px;padding:3px 6px}
+.iconbtn{width:42px;height:42px;padding:0;flex:none}
+.power{color:var(--bad)}
+
+.body{display:grid;grid-template-columns:1fr var(--remote-w);min-height:0}
+.body.left{grid-template-columns:var(--remote-w) 1fr}
+.body.left .remote{order:-1;border-left:0;border-right:1px solid var(--edge)}
+.body.floating,.body.hidden{grid-template-columns:1fr}
+.body.floating .remote{position:fixed;right:24px;bottom:24px;width:var(--remote-w);max-height:calc(100vh - 110px);border:1px solid var(--edge);
+  border-radius:22px;box-shadow:0 20px 60px rgba(0,0,0,.55);z-index:5;background:color-mix(in srgb, var(--sheet) 88%, transparent)}
+.body.hidden .remote{display:none}
+#showRemote{position:fixed;right:24px;bottom:24px;z-index:5;height:48px;padding:0 18px;border-radius:24px;display:none;
+  box-shadow:0 10px 30px rgba(0,0,0,.5);background:var(--ok);border-color:var(--ok-ring);font-weight:600}
+.body.hidden ~ #showRemote{display:inline-flex}
+
+/* ---------- home screen ---------- */
+.home{overflow:auto;padding:30px 40px 60px}
+.home h2{margin:0 0 14px;font-size:22px}
+.home section{margin-bottom:34px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:20px}
+.recent{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(190px,220px);gap:20px;overflow-x:auto;padding:6px 4px 14px;margin:-6px -4px 0}
+.tile{position:relative;padding:0;border:0;background:#000;border-radius:14px;aspect-ratio:290/218;overflow:hidden;display:block;width:100%;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);transition:transform .2s cubic-bezier(.2,.8,.3,1.3),box-shadow .2s;
+  animation:rise .45s both cubic-bezier(.2,.8,.3,1);animation-delay:calc(var(--i, 0) * 28ms)}
+.tile img{width:100%;height:100%;object-fit:cover;display:block}
+.tile span{position:absolute;left:0;right:0;bottom:0;padding:22px 12px 9px;font-size:13px;font-weight:600;text-align:left;
+  background:linear-gradient(transparent,rgba(0,0,0,.8));opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s}
+.tile:hover,.tile:focus-visible{transform:translateY(-6px) scale(1.04);box-shadow:0 18px 40px rgba(0,0,0,.55),0 0 0 3px var(--ok-ring),0 0 34px color-mix(in srgb, var(--ok-ring) 45%, transparent);outline:none;z-index:2}
+.tile:hover span,.tile:focus-visible span{opacity:1;transform:none}
+.tile:active{transform:translateY(-2px) scale(.98)}
+.tile.launch{animation:launch .5s ease-out}
+@keyframes rise{from{opacity:0;transform:translateY(16px) scale(.97)}}
+@keyframes launch{40%{transform:scale(1.1);box-shadow:0 0 0 4px #fff,0 0 60px var(--ok-ring)}}
+.empty{padding:40px;border:1px dashed var(--edge);border-radius:16px;text-align:center;color:var(--muted)}
+
+/* ---------- remote panel ---------- */
+.remote{border-left:1px solid var(--edge);background:rgba(0,0,0,.16);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  padding:20px;display:flex;flex-direction:column;gap:12px;overflow:auto}
+.rhead{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:var(--muted);font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.rhead button{width:34px;height:34px;padding:0}
+.row{display:grid;gap:10px}
+.r3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.r4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.row button{height:46px}
+#pad{position:relative;width:100%;aspect-ratio:1;max-width:300px;margin:4px auto;touch-action:none;user-select:none}
+#ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible;cursor:pointer}
+.wedge{fill:url(#padGrad);stroke:var(--gap);stroke-width:3;transition:filter .1s}
+.wedge:hover{filter:brightness(1.12)}
+.wedge.on{fill:var(--pad-hi)}
+.ok-btn{fill:var(--ok);stroke:var(--ok-ring);stroke-width:2}
+.ok-btn:hover{filter:brightness(1.15)}
+.ok-btn.on{fill:var(--pad-hi)}
+.chev{fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.oklabel{fill:#fff;font-weight:700;font-size:17px;pointer-events:none}
+.ripple{position:absolute;border-radius:50%;pointer-events:none;border:2px solid var(--ok-ring);animation:ripple .5s ease-out forwards}
+@keyframes ripple{from{width:10px;height:10px;opacity:.9;transform:translate(-50%,-50%)}to{width:120px;height:120px;opacity:0;transform:translate(-50%,-50%)}}
+.typebox{display:flex;align-items:center;gap:8px;height:44px;padding:0 6px 0 12px;border-radius:12px;background:rgba(0,0,0,.25);border:1px solid var(--edge)}
+.typebox input{flex:1;min-width:0;background:none;border:0;outline:none;height:42px}
+.typebox button{height:32px;padding:0 10px;font-size:13px}
+.hint{font-size:12px;color:var(--muted);text-align:center}
+
+/* ---------- dialogs ---------- */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:20;
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.modal-bg.open{display:flex}
+.modal{width:min(640px,calc(100vw - 40px));max-height:calc(100vh - 60px);overflow:auto;background:var(--sheet);border:1px solid var(--edge);
+  border-radius:20px;padding:22px 24px;box-shadow:0 30px 80px rgba(0,0,0,.6);animation:pop .22s cubic-bezier(.2,.8,.3,1.2)}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.97)}}
+.sheet h3{margin:0 0 6px;font-size:20px;display:flex;justify-content:space-between;align-items:center}
+.sheet h3 button{width:38px;height:38px;padding:0;background:none;border:0}
+.sec{font-size:14px;font-weight:600;margin:18px 0 10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.themes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.themes button{justify-content:flex-start;padding:0 12px;height:44px;gap:10px;font-size:14px;min-width:0}
+.themes button span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.themes button.wide{grid-column:1/-1}
+.themes button.sel{border-color:var(--ok-ring);background:var(--btn-hi)}
+.sw{width:18px;height:18px;border-radius:50%;flex:none;border:1px solid rgba(255,255,255,.3)}
+.seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.seg button{height:40px}
+.seg button.sel{background:var(--ok);border-color:var(--ok-ring)}
+.tog{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;background:var(--btn);border:1px solid var(--edge);margin-bottom:8px;cursor:pointer}
+.tog input{width:18px;height:18px;accent-color:var(--ok-ring)}
+.keys{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:6px 12px;font-size:13px;align-items:center}
+.keys kbd{font:12px/1 inherit;border:1px solid var(--edge);border-radius:5px;padding:4px 7px;background:rgba(255,255,255,.05);justify-self:start;white-space:nowrap}
+.links{display:flex;gap:10px;margin-top:18px}
+.links a{color:var(--ok-ring);font-size:14px}
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#000d;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;
+  opacity:0;transition:opacity .2s;pointer-events:none;z-index:40}
+#toast.show{opacity:1}
+
+/* Prism theme: shared with the phone version */
+/* ===== Prism (secret theme): liquid RGB, glass buttons, rainbow edges ===== */
+@property --ang{syntax:'<angle>';inherits:true;initial-value:0deg}
+@keyframes prismSpin{to{--ang:360deg}}
+@keyframes prismHue{
+  from{filter:drop-shadow(0 0 16px #ff3dff) hue-rotate(0deg)}
+  to{filter:drop-shadow(0 0 16px #ff3dff) hue-rotate(360deg)}
+}
+@keyframes prismSlide{to{background-position:200% 0}}
+@keyframes prismPulse{50%{stroke-width:4}}
+#fxTop{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30}
+:root.fx-prism{animation:prismSpin 4s linear infinite}
+.fx-prism{--rainbow:#ff004c,#ffb300,#3dff6e,#00e5ff,#4d5bff,#ff3dff,#ff004c}
+/* glass body + a rainbow edge drawn by a masked ring, so only the border is colored */
+.fx-prism .row:not(.icons) button,.fx-prism .tog,.fx-prism .np,.fx-prism .slider,.fx-prism .dev,.fx-prism .themes button{
+  position:relative;background:rgba(255,255,255,.07);border:1.5px solid transparent;
+  -webkit-backdrop-filter:blur(14px) saturate(170%);backdrop-filter:blur(14px) saturate(170%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -10px 18px rgba(255,255,255,.04),0 0 18px rgba(150,90,255,.35);
+}
+.fx-prism .row:not(.icons) button::before,.fx-prism .tog::before,.fx-prism .np::before,.fx-prism .slider::before,.fx-prism .dev::before,.fx-prism .themes button::before,.fx-prism #swipe::before{
+  content:"";position:absolute;inset:-1.5px;border-radius:inherit;padding:1.5px;pointer-events:none;
+  background:conic-gradient(from var(--ang),var(--rainbow));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+}
+.fx-prism .row:not(.icons) button:active,.fx-prism .row:not(.icons) button.on{
+  background:rgba(255,255,255,.26);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 0 30px rgba(255,255,255,.6);
+}
+.fx-prism #ring{animation:prismHue 5s linear infinite}
+.fx-prism .wedge{fill-opacity:.88}
+.fx-prism .wedge.on{fill:#fff;fill-opacity:.92}
+.fx-prism .ok-btn{fill:rgba(255,255,255,.1);animation:prismPulse 1.6s ease-in-out infinite}
+.fx-prism .ok-btn.on{fill:rgba(255,255,255,.75)}
+.fx-prism #devName,.fx-prism .sheet h3{
+  background:linear-gradient(90deg,var(--rainbow));background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:prismSlide 3s linear infinite;
+}
+.fx-prism .sheet h3 button{color:var(--text);-webkit-text-fill-color:currentColor}
+.fx-prism .icons button svg{filter:drop-shadow(0 0 6px rgba(255,255,255,.55))}
+.fx-prism #swipe{
+  background:rgba(255,255,255,.07);border:2px solid transparent;
+  -webkit-backdrop-filter:blur(16px) saturate(170%);backdrop-filter:blur(16px) saturate(170%);
+  box-shadow:0 0 34px rgba(150,90,255,.5),inset 0 1px 0 rgba(255,255,255,.3);
+}
+.fx-prism #swipe::before{inset:-2px;padding:2px}
+.fx-prism .sheet{background:rgba(14,7,30,.72);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%)}
+.fx-still,.fx-still *{animation:none!important}
+.fx-prism .tile{box-shadow:0 0 0 1.5px rgba(255,255,255,.25),0 0 22px rgba(150,90,255,.35)}
+.fx-prism .tile:hover{box-shadow:0 0 0 3px #fff,0 0 50px rgba(255,80,220,.6)}
+.fx-prism header,.fx-prism .remote{background:rgba(14,7,30,.45)}
+.fx-prism .np,.fx-prism .search,.fx-prism .devpick{position:relative;background:rgba(255,255,255,.07);border-color:transparent}
+.fx-prism .np::before,.fx-prism .search::before,.fx-prism .devpick::before{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.5px;pointer-events:none;
+  background:conic-gradient(from var(--ang),var(--rainbow));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+}
+.fx-prism .brand span{background:linear-gradient(90deg,var(--rainbow));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:prismSlide 3s linear infinite}
+.fx-prism .modal{background:rgba(14,7,30,.78);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-power" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></g></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></g></symbol>
+    <symbol id="i-kb" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5.5" width="20" height="13" rx="2.5"/><path d="M6 9.5h0M9.5 9.5h0M13 9.5h0M16.5 9.5h0M6 13h0M18 13h0M9 15.5h6" stroke-width="2.4"/></g></symbol>
+    <symbol id="i-apps" viewBox="0 0 24 24"><g fill="currentColor"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></g></symbol>
+    <symbol id="i-dpad" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/><path d="M12 4.5l-1.6 2h3.2zM12 19.5l-1.6-2h3.2zM4.5 12l2-1.6v3.2zM19.5 12l-2-1.6v3.2z" fill="currentColor" stroke-width="1"/></g></symbol>
+    <symbol id="i-swipe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 12h10M9.5 9.5 7 12l2.5 2.5M14.5 9.5 17 12l-2.5 2.5"/></g></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 5.5 4.5 12 11 18.5"/></g></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3.2 2.5 11.4h2.8V20h5v-5.5h3.4V20h5v-8.6h2.8z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5v17M4.6 7.75l14.8 8.5M19.4 7.75l-14.8 8.5"/></g></symbol>
+    <symbol id="i-replay" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4v5h5"/></g></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></g></symbol>
+    <symbol id="i-voldn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 12h5"/></g></symbol>
+    <symbol id="i-volup" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 12h6M18.5 9v6"/></g></symbol>
+    <symbol id="i-rev" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 6v12L3 12zM21 6v12l-8.5-6z"/></symbol>
+    <symbol id="i-fwd" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 6v12L21 12zM3 6v12l8.5-6z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M2.5 5.5v13l9.5-6.5zM14 5.5h3v13h-3zM19 5.5h3v13h-3z"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20l1-4.5L16.5 4l3.5 3.5L8.5 19z"/></g></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></g></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></g></symbol>
+    <symbol id="i-fav" viewBox="0 0 24 24"><path stroke-linejoin="round" d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6-4.5-4.2 6.1-.8z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-caret" viewBox="0 0 24 24"><path fill="currentColor" d="M6 9h12l-6 7z"/></symbol>
+  </defs>
+</svg>
+
+<canvas id="fx"></canvas>
+<canvas id="fxTop"></canvas>
+
+<div class="page">
+  <header>
+    <div class="brand"><img src="/icons/favicon-32.png" alt=""><span>Remote+</span></div>
+    <div class="devpick" title="Which Roku to control">
+      <span id="dot" class="dot"></span>
+      <select id="devSel" aria-label="Roku"></select>
+      <button id="defBtn" class="star" aria-label="Make this the default Roku" title="Default Roku"><svg width="18" height="18"><use href="#i-fav"/></svg></button>
+      <button id="rescan" aria-label="Search again for Rokus" title="Search again"><svg width="18" height="18"><use href="#i-replay"/></svg></button>
+    </div>
+    <div id="np" class="np" hidden>
+      <img id="npIcon" alt="">
+      <div class="np-info">
+        <div class="np-top"><span id="npApp"></span><span id="npTime"></span></div>
+        <div class="np-bar"><div id="npFill"></div></div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <form class="search" id="searchForm">
+      <svg width="18" height="18"><use href="#i-search"/></svg>
+      <input id="searchQ" type="search" placeholder="Search on your TV…" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </form>
+    <button class="iconbtn power" data-key="Power" aria-label="Power" title="Power"><svg width="22" height="22"><use href="#i-power"/></svg></button>
+    <button class="iconbtn" id="setBtn" aria-label="Settings" title="Settings"><svg width="22" height="22"><use href="#i-gear"/></svg></button>
+  </header>
+
+  <div class="body" id="body">
+    <main class="home">
+      <section id="recentSec" hidden>
+        <h2>Recent</h2>
+        <div class="recent" id="recentRow"></div>
+      </section>
+      <section>
+        <h2 id="appsTitle">Your apps</h2>
+        <div class="grid" id="appGrid"><div class="empty">Looking for Rokus…</div></div>
+      </section>
+    </main>
+
+    <aside class="remote" id="remote">
+      <div class="rhead"><span>Remote</span><button id="hideRemote" aria-label="Hide remote" title="Hide remote (R)"><svg width="16" height="16"><use href="#i-close"/></svg></button></div>
+      <div class="row r3">
+        <button data-key="Back" title="Back (Backspace / Esc)"><svg width="22" height="22"><use href="#i-back"/></svg></button>
+        <button data-key="Info" title="Options (*)"><svg width="20" height="20"><use href="#i-star"/></svg></button>
+        <button data-key="Home" title="Home (H)"><svg width="22" height="22"><use href="#i-home"/></svg></button>
+      </div>
+      <div id="pad">
+        <svg id="ring" viewBox="0 0 200 200">
+          <defs>
+            <linearGradient id="padGrad" x1="0" y1="0" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+              <stop offset="0" style="stop-color:var(--pad-top)"/><stop offset="1" style="stop-color:var(--pad-bot)"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div class="row r4">
+        <button data-key="InstantReplay" title="Instant replay"><svg width="20" height="20"><use href="#i-replay"/></svg></button>
+        <button data-key="VolumeMute" title="Mute (M)"><svg width="20" height="20"><use href="#i-mute"/></svg></button>
+        <button data-key="VolumeDown" data-repeat title="Volume down (-)"><svg width="20" height="20"><use href="#i-voldn"/></svg></button>
+        <button data-key="VolumeUp" data-repeat title="Volume up (+)"><svg width="20" height="20"><use href="#i-volup"/></svg></button>
+      </div>
+      <div class="row r3">
+        <button data-key="Rev" title="Rewind (,)"><svg width="22" height="22"><use href="#i-rev"/></svg></button>
+        <button data-key="Play" title="Play/Pause (Space)"><svg width="24" height="24"><use href="#i-play"/></svg></button>
+        <button data-key="Fwd" title="Fast forward (.)"><svg width="22" height="22"><use href="#i-fwd"/></svg></button>
+      </div>
+      <div class="typebox">
+        <svg width="18" height="18"><use href="#i-kb"/></svg>
+        <input id="kbInput" placeholder="Type on the TV…" autocomplete="off" spellcheck="false">
+        <button id="kbClear" type="button">Clear</button>
+      </div>
+      <div class="hint" id="kbHint">Tip: use your keyboard's arrow keys, Enter and Backspace</div>
+    </aside>
+  </div>
+  <button id="showRemote"><svg width="18" height="18"><use href="#i-dpad"/></svg> Remote</button>
+</div>
+
+<div class="modal-bg" id="setBg">
+  <div class="modal sheet" role="dialog" aria-label="Settings">
+    <h3>Settings <button id="setClose" aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button></h3>
+    <div id="themeSec">
+      <div class="sec">Theme</div>
+      <div class="themes" id="themeList"></div>
+    </div>
+    <div class="sec">Remote</div>
+    <div class="seg" id="posSeg">
+      <button data-pos="right">Right</button><button data-pos="left">Left</button>
+      <button data-pos="floating">Floating</button><button data-pos="hidden">Hidden</button>
+    </div>
+    <div class="sec">Effects &amp; controls</div>
+    <label class="tog"><span>Animations</span><input type="checkbox" id="animTog"></label>
+    <label class="tog"><span>Keyboard shortcuts</span><input type="checkbox" id="keysTog"></label>
+    <div class="keys" id="keyList">
+      <kbd>← ↑ → ↓</kbd><span>Move</span><kbd>Enter</kbd><span>OK</span>
+      <kbd>Backspace / Esc</kbd><span>Back</span><kbd>H</kbd><span>Home</span>
+      <kbd>Space</kbd><span>Play / Pause</span><kbd>, &nbsp; .</kbd><span>Rewind / Forward</span>
+      <kbd>- &nbsp; +</kbd><span>Volume</span><kbd>M</kbd><span>Mute</span>
+      <kbd>*</kbd><span>Options</span><kbd>/</kbd><span>Search</span>
+      <kbd>R</kbd><span>Show / hide remote</span><kbd>Tab</kbd><span>Move between apps</span>
+    </div>
+    <div class="links"><a href="/?mobile" id="phoneLink">Switch to the phone layout</a></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+};
+try{ localStorage.setItem('roku.view', 'desktop'); }catch(e){}
+const state = { ip: store.get('roku.ip', ''), dev: store.get('roku.dev', ''), devices: [] };
+let aliases = {}; try{ aliases = JSON.parse(store.get('roku.aliases', '{}')) || {}; }catch(e){}
+const idOf = d => d.id || d.ip;
+const nameOf = d => aliases[idOf(d)] || d.name;
+const enc = encodeURIComponent;
+
+let toastT;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400); }
+function setDot(c){ $('#dot').className = 'dot ' + (c || ''); }
+function buzz(){}   // no haptics on a computer; kept so shared code can call it
+
+/* ---------- talking to the server (presses kept in order) ---------- */
+async function api(path, body){
+  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
+  const r = await fetch(path, opt);
+  let data = {}; try{ data = await r.json(); }catch(e){}
+  if(!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+let chain = Promise.resolve(), pending = 0;
+function queue(path, body, isRepeat){
+  if(!state.ip){ toast('No Roku selected'); return; }
+  if(isRepeat && pending > 2) return;
+  pending++;
+  const ip = state.ip;
+  chain = chain.then(() => api(path, { ip, ...body }))
+    .then(() => { setDot('ok'); pollNow(700); }, e => { setDot('err'); toast(e.message); })
+    .finally(() => pending--);
+}
+const send = (key, isRepeat) => queue('/api/key', { key }, isRepeat);
+const REPEAT = [ { delay:520, every:230 }, { delay:450, every:160 }, { delay:380, every:110 }, { delay:300, every:80 }, { delay:240, every:55 } ];
+const repeatFeel = () => REPEAT[Math.min(5, Math.max(1, parseInt(store.get('roku.repeat', '3'), 10) || 3)) - 1];
+function holdRepeat(fn){
+  fn(false);
+  const r = repeatFeel();
+  let iv; const t = setTimeout(() => { iv = setInterval(() => fn(true), r.every); }, r.delay);
+  return () => { clearTimeout(t); clearInterval(iv); };
+}
+
+/* ---------- buttons ---------- */
+document.querySelectorAll('button[data-key]').forEach(b => {
+  const key = b.dataset.key, rep = b.hasAttribute('data-repeat');
+  let stop = null;
+  b.addEventListener('pointerdown', e => {
+    if(e.button !== 0) return;
+    e.preventDefault(); b.classList.add('on');
+    if(rep) stop = holdRepeat(r => send(key, r)); else send(key);
+  });
+  const end = () => { b.classList.remove('on'); if(stop){ stop(); stop = null; } };
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => b.addEventListener(ev, end));
+});
+
+/* ---------- D-pad ---------- */
+const NS = 'http://www.w3.org/2000/svg', C = 100, R = 98, RI = 29;
+const ring = $('#ring'), pad = $('#pad'), parts = {};
+const pt = (rad, deg) => [C + rad * Math.cos(deg * Math.PI / 180), C + rad * Math.sin(deg * Math.PI / 180)];
+function sector(a0, a1){
+  const [x0, y0] = pt(R, a0), [x1, y1] = pt(R, a1), [x2, y2] = pt(RI, a1), [x3, y3] = pt(RI, a0);
+  return `M${x0} ${y0}A${R} ${R} 0 0 1 ${x1} ${y1}L${x2} ${y2}A${RI} ${RI} 0 0 0 ${x3} ${y3}Z`;
+}
+const el = (tag, attrs) => { const n = document.createElementNS(NS, tag); for(const k in attrs) n.setAttribute(k, attrs[k]); ring.appendChild(n); return n; };
+for(const [k, mid] of [['Right', 0], ['Down', 90], ['Left', 180], ['Up', 270]]){
+  parts[k] = el('path', { d: sector(mid - 45, mid + 45), class: 'wedge' });
+  const [gx, gy] = pt(66, mid);
+  el('path', { d: 'M-5 -11L6 0L-5 11', class: 'chev', transform: `translate(${gx} ${gy}) rotate(${mid})` });
+}
+parts.Select = el('circle', { cx: C, cy: C, r: RI - 4, class: 'ok-btn' });
+el('text', { x: C, y: C + 6, 'text-anchor': 'middle', class: 'oklabel' }).textContent = 'OK';
+const dirOf = (dx, dy) => Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'Right' : 'Left') : (dy > 0 ? 'Down' : 'Up');
+function regionAt(x, y){
+  const b = pad.getBoundingClientRect(), dx = x - (b.left + b.width / 2), dy = y - (b.top + b.height / 2);
+  return Math.hypot(dx, dy) < (b.width / 2) * (RI / 100) ? 'Select' : dirOf(dx, dy);
+}
+function ripple(x, y){
+  if(!animationsOn()) return;
+  const b = pad.getBoundingClientRect(), r = document.createElement('span');
+  r.className = 'ripple'; r.style.left = (x - b.left) + 'px'; r.style.top = (y - b.top) + 'px';
+  pad.appendChild(r); setTimeout(() => r.remove(), 520);
+}
+let padStop = null;
+pad.addEventListener('pointerdown', e => {
+  if(e.button !== 0) return;
+  e.preventDefault();
+  const k = regionAt(e.clientX, e.clientY);
+  parts[k].classList.add('on'); ripple(e.clientX, e.clientY);
+  if(k === 'Select') send('Select'); else padStop = holdRepeat(r => send(k, r));
+});
+const padEnd = () => { if(padStop){ padStop(); padStop = null; } Object.values(parts).forEach(p => p.classList.remove('on')); };
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => pad.addEventListener(ev, padEnd));
+
+/* ---------- typing on the TV (live, like the phone keyboard) ---------- */
+const kb = $('#kbInput'); let prev = '';
+kb.addEventListener('input', () => {
+  const v = kb.value; let i = 0;
+  while(i < prev.length && i < v.length && prev[i] === v[i]) i++;
+  for(let n = 0; n < prev.length - i; n++) send('Backspace');
+  const add = v.slice(i);
+  if(add) queue('/api/text', { text: add });
+  prev = v;
+});
+kb.addEventListener('keydown', e => {
+  if(e.key === 'Enter'){ e.preventDefault(); send('Enter'); }
+  if(e.key === 'Escape'){ kb.blur(); }
+});
+$('#kbClear').addEventListener('click', () => { for(let n = 0; n < prev.length; n++) send('Backspace'); kb.value = ''; prev = ''; kb.focus(); });
+
+/* ---------- search on the TV ---------- */
+$('#searchForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = $('#searchQ').value.trim();
+  if(!q) return;
+  queue('/api/search', { q }); toast(`Showing “${q}” on your TV`); $('#searchQ').blur();
+});
+
+/* ---------- Rokus (same order, names and default as the phone version) ---------- */
+let firstLoad = true;
+const getOrder = () => { try{ return JSON.parse(store.get('roku.order', '[]')) || []; }catch(e){ return []; } };
+function sortDevices(){
+  const order = getOrder(), pos = d => { const i = order.indexOf(idOf(d)); return i < 0 ? 1e9 : i; };
+  state.devices.sort((a, b) => pos(a) - pos(b) || a.name.localeCompare(b.name));
+}
+function renderDevices(){
+  const sel = $('#devSel'); sel.innerHTML = '';
+  if(!state.devices.length) sel.add(new Option('No Roku found', ''));
+  for(const d of state.devices) sel.add(new Option(nameOf(d) + (d.limited ? ' (limited)' : ''), idOf(d)));
+  sel.value = state.dev;
+  const def = store.get('roku.default', ''), on = !!state.dev && def === state.dev;
+  $('#defBtn').classList.toggle('on', on);
+  $('#defBtn').title = on ? 'This is your default Roku' : 'Make this the default Roku';
+}
+function selectDevice(d){
+  state.dev = d ? idOf(d) : ''; state.ip = d ? d.ip : '';
+  store.set('roku.dev', state.dev); store.set('roku.ip', state.ip);
+  setDot(''); renderDevices(); loadApps(); np = null; renderNow(); pollNow(true);
+}
+async function loadDevices(refresh){
+  if(refresh){ $('#devSel').innerHTML = '<option>Searching…</option>'; }
+  try{
+    const { devices } = await api('/api/devices' + (refresh ? '?refresh=1' : ''));
+    state.devices = devices; sortDevices();
+    let pick = firstLoad ? devices.find(d => idOf(d) === store.get('roku.default', '')) : null;
+    if(!pick) pick = devices.find(d => idOf(d) === state.dev) || (!state.dev && devices.find(d => d.ip === state.ip)) || devices[0] || null;
+    firstLoad = false;
+    selectDevice(pick);
+    if(!devices.length) toast('No Rokus found. Use the refresh button to search again.');
+  }catch(e){ setDot('err'); toast('Can’t reach the remote server'); renderDevices(); }
+}
+$('#devSel').addEventListener('change', e => selectDevice(state.devices.find(d => idOf(d) === e.target.value)));
+$('#rescan').addEventListener('click', () => loadDevices(true));
+$('#defBtn').addEventListener('click', () => {
+  if(!state.dev) return;
+  const d = state.devices.find(x => idOf(x) === state.dev);
+  if(store.get('roku.default', '') === state.dev){ store.set('roku.default', ''); toast('No default Roku'); }
+  else { store.set('roku.default', state.dev); toast(`${nameOf(d)} is now the default`); }
+  renderDevices();
+});
+
+/* ---------- home screen: your apps, in the order you arranged them on the Roku ---------- */
+let appList = [];
+const recentKey = () => 'roku.recent.' + (state.dev || state.ip);
+const getRecent = () => { try{ return JSON.parse(store.get(recentKey(), '[]')) || []; }catch(e){ return []; } };
+const iconUrl = id => `/api/icon?ip=${enc(state.ip)}&id=${enc(id)}`;
+function tile(a, i){
+  const b = document.createElement('button'); b.className = 'tile'; b.style.setProperty('--i', i);
+  b.title = `Open ${a.name}`;
+  const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.src = iconUrl(a.id);
+  const s = document.createElement('span'); s.textContent = a.name;
+  b.append(img, s);
+  // after a mouse click, hand the keyboard back to the TV controls (Tab + Enter still works for opening apps)
+  b.addEventListener('click', e => { launch(a, b); if(e.detail > 0) b.blur(); });
+  return b;
+}
+function launch(a, tileEl){
+  queue('/api/launch', { id: a.id });
+  const ids = [a.id, ...getRecent().filter(x => x !== a.id)].slice(0, 8);
+  store.set(recentKey(), JSON.stringify(ids));
+  if(tileEl && animationsOn()){ tileEl.classList.remove('launch'); void tileEl.offsetWidth; tileEl.classList.add('launch'); }
+  toast(`Opening ${a.name}`);
+  setTimeout(renderRecent, 600);
+}
+function renderRecent(){
+  const rec = getRecent().map(id => appList.find(a => a.id === id)).filter(Boolean);
+  const row = $('#recentRow'); row.innerHTML = '';
+  rec.forEach((a, i) => row.appendChild(tile(a, i)));
+  $('#recentSec').hidden = !rec.length;
+}
+async function loadApps(){
+  const grid = $('#appGrid');
+  if(!state.ip){ grid.innerHTML = '<div class="empty">No Roku selected yet.</div>'; $('#recentSec').hidden = true; return; }
+  grid.innerHTML = '<div class="empty">Loading your apps…</div>';
+  const ip = state.ip;
+  try{
+    const { apps } = await api('/api/apps?ip=' + enc(ip));
+    if(ip !== state.ip) return;
+    appList = apps; grid.innerHTML = '';
+    apps.forEach((a, i) => grid.appendChild(tile(a, i)));
+    if(!apps.length) grid.innerHTML = '<div class="empty">No apps found.</div>';
+    const d = state.devices.find(x => idOf(x) === state.dev);
+    $('#appsTitle').textContent = d ? `Apps on ${nameOf(d)}` : 'Your apps';
+    renderRecent();
+  }catch(e){ appList = []; grid.innerHTML = `<div class="empty">${e.message}</div>`; $('#recentSec').hidden = true; }
+}
+
+/* ---------- now playing ---------- */
+let np = null, npAt = 0, npTimer = 0, npBusy = false;
+const fmtTime = ms => { const t = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = String(t % 60).padStart(2, '0');
+                        return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`; };
+function renderNow(){
+  const box = $('#np');
+  if(!np || !np.app){ box.hidden = true; return; }
+  box.hidden = false;
+  const src = iconUrl(np.app.id);
+  if($('#npIcon').getAttribute('src') !== src) $('#npIcon').src = src;
+  $('#npApp').textContent = np.app.name;
+  const p = np.player, st = p && p.state;
+  let time = '', pct = null;
+  if(p && p.live) time = 'LIVE';
+  else if(p && p.duration && p.position != null && ['play', 'pause', 'buffer'].includes(st)){
+    const pos = Math.min(p.duration, p.position + (st === 'play' ? performance.now() - npAt : 0));
+    time = `${fmtTime(pos)} / ${fmtTime(p.duration)}`; pct = pos / p.duration * 100;
+    if(st === 'pause') time = '❚❚  ' + time;
+  } else if(st === 'pause') time = 'Paused';
+  $('#npTime').textContent = time;
+  box.classList.toggle('nobar', pct == null);
+  if(pct != null) $('#npFill').style.width = pct.toFixed(2) + '%';
+}
+async function pollNow(soon){
+  clearTimeout(npTimer);
+  if(soon !== undefined && soon !== false){ npTimer = setTimeout(() => pollNow(), soon === true ? 0 : soon); return; }
+  if(document.hidden || !state.ip || npBusy){ npTimer = setTimeout(() => pollNow(), 3000); return; }
+  npBusy = true;
+  const ip = state.ip;
+  try{ const d = await api('/api/now?ip=' + enc(ip)); if(ip === state.ip){ np = d; npAt = performance.now(); } }
+  catch(e){ if(ip === state.ip) np = null; }
+  npBusy = false; renderNow();
+  npTimer = setTimeout(() => pollNow(), 3000);
+}
+setInterval(() => { if(np && np.player && np.player.state === 'play' && !document.hidden) renderNow(); }, 1000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) pollNow(true); });
+
+/* ---------- keyboard shortcuts ---------- */
+const KEYMAP = { ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Enter: 'Select', Backspace: 'Back', Escape: 'Back',
+                 h: 'Home', H: 'Home', ' ': 'Play', ',': 'Rev', '.': 'Fwd', '-': 'VolumeDown', '_': 'VolumeDown', '=': 'VolumeUp', '+': 'VolumeUp',
+                 m: 'VolumeMute', M: 'VolumeMute', '*': 'Info' };
+const held = new Set();
+document.addEventListener('keydown', e => {
+  if($('#setBg').classList.contains('open')){ if(e.key === 'Escape') closeSettings(); return; }
+  const t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+  if(e.metaKey || e.ctrlKey || e.altKey) return;
+  if(e.key === '/'){ e.preventDefault(); $('#searchQ').focus(); return; }
+  if(e.key === 'r' || e.key === 'R'){ setPos(curPos() === 'hidden' ? (store.get('desk.lastPos', 'right')) : 'hidden'); return; }
+  if(store.get('desk.keys', 'on') === 'off') return;
+  if(e.key === 'Enter' && t && t.classList && t.classList.contains('tile')) return;   // Enter on a focused app tile opens it
+  const key = KEYMAP[e.key];
+  if(!key) return;
+  e.preventDefault();
+  if(e.repeat && !/^(Up|Down|Left|Right|VolumeUp|VolumeDown)$/.test(key)) return;
+  send(key, e.repeat);
+  if(parts[key]){ parts[key].classList.add('on'); held.add(key); }
+});
+document.addEventListener('keyup', e => {
+  const key = KEYMAP[e.key];
+  if(key && held.has(key)){ parts[key].classList.remove('on'); held.delete(key); }
+});
+
+/* ---------- remote position ---------- */
+const curPos = () => store.get('desk.pos', 'right');
+function setPos(p){
+  if(p !== 'hidden') store.set('desk.lastPos', p);
+  store.set('desk.pos', p);
+  $('#body').className = 'body ' + p;
+  document.querySelectorAll('#posSeg button').forEach(b => b.classList.toggle('sel', b.dataset.pos === p));
+}
+document.querySelectorAll('#posSeg button').forEach(b => b.addEventListener('click', () => setPos(b.dataset.pos)));
+$('#hideRemote').addEventListener('click', () => setPos('hidden'));
+$('#showRemote').addEventListener('click', () => setPos(store.get('desk.lastPos', 'right')));
+
+/* ---------- themes & animations (same config.json themes as the phone) ---------- */
+let cfg = { theme: 'default', animations: true, lock_theme: false, themes: {} };
+let appliedVars = [];
+const todayKey = () => { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const inRange = (k, r) => Array.isArray(r) && r.length === 2 && (r[0] <= r[1] ? (k >= r[0] && k <= r[1]) : (k >= r[0] || k <= r[1]));
+const secretUnlocked = () => store.get('roku.secret', '') === '1';
+function autoTheme(){ const k = todayKey(); for(const [id, t] of Object.entries(cfg.themes)) if(!t.secret && inRange(k, t.dates)) return id; return 'default'; }
+const themeChoice = () => cfg.lock_theme ? 'server' : store.get('roku.theme', 'server');
+function resolveTheme(choice){
+  let id = choice === 'server' ? (cfg.theme || 'auto') : choice;
+  if(id === 'auto') id = autoTheme();
+  if(choice !== 'server' && cfg.themes[id] && cfg.themes[id].secret && !secretUnlocked()) id = 'default';
+  return cfg.themes[id] ? id : (cfg.themes.default ? 'default' : Object.keys(cfg.themes)[0]);
+}
+function animationsOn(){
+  const p = store.get('roku.anim', 'server');
+  if(p === 'on') return true;
+  if(p === 'off') return false;
+  return cfg.animations !== false && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+const labelOf = id => (cfg.themes[id] && cfg.themes[id].label) || id;
+
+/* particle layer: one small canvas, paused when the app isn't visible */
+const fx = (() => {
+  const cv = $('#fx'), ctx = cv.getContext('2d');
+  let spec = null, effect = null, list = [], raf = 0, w = 0, h = 0, last = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function resize(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = innerWidth; h = innerHeight; cv.width = w * dpr; cv.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  }
+  function make(initial){
+    const [s0, s1] = spec.size || [12, 24], size = rnd(s0, s1);
+    const chars = spec.chars && spec.chars.length ? spec.chars : ['•'];
+    const pal = spec.palette && spec.palette.length ? spec.palette : ['#ffffff'];
+    const m = spec.motion || 'fall';
+    const p = { x0: rnd(0, w), size, ch: chars[Math.random() * chars.length | 0], color: pal[Math.random() * pal.length | 0],
+                sp: (spec.speed || 0.5) * rnd(0.6, 1.4) * size / ((s0 + s1) / 2), ph: rnd(0, 6.28), sway: rnd(6, 22),
+                tilt: rnd(-0.4, 0.4), life: 0, ttl: rnd(2.5, 6) };
+    p.y = m === 'fall' ? (initial ? rnd(-h * 0.1, h) : -size)
+        : m === 'rise' ? (initial ? rnd(0, h * 1.1) : h + size)
+        : rnd(0, h);
+    if(m === 'twinkle' && initial) p.life = rnd(0, p.ttl);
+    return p;
+  }
+  function frame(t){
+    raf = requestAnimationFrame(frame);
+    const dt = Math.min(50, t - (last || t)) / 16.67; last = t;
+    ctx.clearRect(0, 0, w, h);
+    if(effect === 'prism'){                       // liquid RGB: big soft blobs drifting and cycling hue
+      const T = t / 1000, r = Math.max(w, h) * 0.55;
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1;
+      for(let i = 0; i < 5; i++){
+        const bx = w * (0.5 + 0.45 * Math.sin(T * 0.31 * (1 + i * 0.17) + i * 1.9));
+        const by = h * (0.5 + 0.45 * Math.cos(T * 0.23 * (1 + i * 0.13) + i * 2.7));
+        const hue = (T * 40 + i * 72) % 360;
+        const g = ctx.createRadialGradient(bx, by, 0, bx, by, r);
+        g.addColorStop(0, `hsla(${hue},100%,58%,.42)`); g.addColorStop(1, `hsla(${hue},100%,50%,0)`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    if(!spec) return;
+    const m = spec.motion || 'fall', op = spec.opacity == null ? 0.7 : spec.opacity;
+    for(let i = 0; i < list.length; i++){
+      const p = list[i]; p.ph += 0.02 * dt;
+      let a = op, x = p.x0;
+      if(m === 'twinkle'){
+        p.life += dt / 60;
+        if(p.life >= p.ttl){ list[i] = make(false); continue; }
+        a = op * Math.sin(Math.PI * p.life / p.ttl);
+      } else {
+        p.y += (m === 'fall' ? 1 : -1) * p.sp * dt * 1.2;
+        x += Math.sin(p.ph) * p.sway;
+        if(p.y > h + p.size * 2 || p.y < -p.size * 2){ list[i] = make(false); continue; }
+      }
+      ctx.globalAlpha = Math.max(0, a); ctx.fillStyle = p.color;
+      ctx.font = `${p.size}px -apple-system, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+      ctx.save(); ctx.translate(x, p.y); ctx.rotate(p.tilt * Math.sin(p.ph)); ctx.fillText(p.ch, 0, 0); ctx.restore();
+    }
+  }
+  const start = () => { if(!raf && (spec || effect) && !document.hidden){ last = 0; raf = requestAnimationFrame(frame); } };
+  const stop = () => { cancelAnimationFrame(raf); raf = 0; };
+  addEventListener('resize', resize);
+  document.addEventListener('visibilitychange', () => document.hidden ? stop() : start());
+  resize();
+  return {
+    set(newSpec, newEffect){
+      stop(); spec = newSpec || null; effect = newEffect || null; list = []; ctx.clearRect(0, 0, w, h);
+      if(spec) for(let i = 0, n = Math.min(spec.count || 20, 80); i < n; i++) list.push(make(true));
+      start();
+    }
+  };
+})();
+
+const burst = (() => {
+  const cv = $('#fxTop'), ctx = cv.getContext('2d');
+  let sparks = [], rings = [], raf = 0, w = 0, h = 0;
+  function resize(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = innerWidth; h = innerHeight; cv.width = w * dpr; cv.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  addEventListener('resize', resize); resize();
+  const ease = t => 1 - Math.pow(1 - t, 3);
+  function frame(){
+    ctx.clearRect(0, 0, w, h); ctx.globalCompositeOperation = 'lighter';
+    rings = rings.filter(r => {
+      r.t += 1 / 34; if(r.t >= 1) return false; if(r.t <= 0) return true;
+      const c = `hsl(${(r.hue + r.t * 140) % 360},100%,65%)`;
+      ctx.globalAlpha = 1 - r.t; ctx.strokeStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 18;
+      ctx.lineWidth = 4 * (1 - r.t) + 1; ctx.beginPath(); ctx.arc(r.x, r.y, r.max * ease(r.t), 0, 6.2832); ctx.stroke();
+      return true;
+    });
+    sparks = sparks.filter(p => {
+      if(--p.life <= 0) return false;
+      p.x += p.vx; p.y += p.vy; p.vx *= 0.93; p.vy *= 0.93;
+      const c = `hsl(${p.hue},100%,66%)`;
+      ctx.globalAlpha = p.life / p.max; ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+      return true;
+    });
+    ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over';
+    if(sparks.length || rings.length) raf = requestAnimationFrame(frame); else { raf = 0; ctx.clearRect(0, 0, w, h); }
+  }
+  return (x, y, big) => {
+    const hue = Math.random() * 360, n = big ? 70 : 18;
+    for(let i = 0; i < n; i++){
+      const a = Math.random() * 6.2832, sp = (big ? 6 : 3) + Math.random() * (big ? 9 : 4), life = (big ? 55 : 26) + Math.random() * 16;
+      sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 1.4 + Math.random() * (big ? 3.2 : 2), hue: (hue + Math.random() * 180) % 360, life, max: life });
+    }
+    rings.push({ x, y, t: 0, max: big ? Math.max(w, h) * 0.75 : 64, hue });
+    if(big) rings.push({ x, y, t: -0.18, max: Math.max(w, h) * 0.5, hue: hue + 120 });
+    if(!raf) raf = requestAnimationFrame(frame);
+  };
+})();
+document.addEventListener('pointerdown', e => {
+  if(document.documentElement.classList.contains('fx-prism') && animationsOn()) burst(e.clientX, e.clientY, false);
+}, true);
+
+function applyTheme(){
+  const id = resolveTheme(themeChoice()), t = cfg.themes[id] || {}, root = document.documentElement;
+  appliedVars.forEach(v => root.style.removeProperty(v)); appliedVars = [];
+  for(const [k, v] of Object.entries(t.colors || {})){ root.style.setProperty('--' + k, v); appliedVars.push('--' + k); }
+  document.querySelector('meta[name=theme-color]').content = (t.colors && t.colors.bg) || '#0a0418';
+  const moving = animationsOn();
+  root.classList.toggle('fx-prism', t.effect === 'prism');
+  root.classList.toggle('fx-still', !moving);
+  fx.set(moving ? t.particles : null, moving ? t.effect : null);
+}
+function swatch(id){
+  const c = (cfg.themes[id] && cfg.themes[id].colors) || {};
+  const sp = document.createElement('span'); sp.className = 'sw';
+  sp.style.background = `linear-gradient(135deg, ${c['pad-top'] || '#6b33dc'}, ${c['pad-bot'] || '#3a1092'})`;
+  return sp;
+}
+function renderSettings(){
+  $('#themeSec').style.display = cfg.lock_theme ? 'none' : '';
+  const list = $('#themeList'); list.innerHTML = '';
+  const choice = themeChoice();
+  const opts = [['server', `Server default · ${labelOf(resolveTheme('server'))}`],
+                ['auto', `Auto by date · ${labelOf(autoTheme())}`],
+                ...Object.keys(cfg.themes).filter(id => !cfg.themes[id].secret || secretUnlocked()).map(id => [id, labelOf(id)])];
+  for(const [val, text] of opts){
+    const b = document.createElement('button');
+    if(val === choice) b.classList.add('sel');
+    if(val === 'server' || val === 'auto') b.classList.add('wide');
+    const label = document.createElement('span'); label.textContent = text;
+    b.append(swatch(resolveTheme(val)), label);
+    b.addEventListener('click', () => { store.set('roku.theme', val); applyTheme(); renderSettings(); });
+    list.appendChild(b);
+  }
+  $('#animTog').checked = animationsOn();
+  $('#keysTog').checked = store.get('desk.keys', 'on') !== 'off';
+  $('#keyList').style.opacity = $('#keysTog').checked ? 1 : .4;
+  document.querySelectorAll('#posSeg button').forEach(b => b.classList.toggle('sel', b.dataset.pos === curPos()));
+}
+function openSettings(){ renderSettings(); $('#setBg').classList.add('open'); }
+function closeSettings(){ $('#setBg').classList.remove('open'); }
+$('#setClose').addEventListener('click', closeSettings);
+$('#setBg').addEventListener('click', e => { if(e.target === $('#setBg')) closeSettings(); });
+$('#animTog').addEventListener('change', e => { store.set('roku.anim', e.target.checked ? 'on' : 'off'); applyTheme(); });
+$('#keysTog').addEventListener('change', e => { store.set('desk.keys', e.target.checked ? 'on' : 'off'); renderSettings(); });
+$('#phoneLink').addEventListener('click', () => store.set('roku.view', 'mobile'));
+
+/* the secret: press and hold the Settings gear for 1.5 seconds */
+function unlockSecret(){
+  const id = Object.keys(cfg.themes).find(k => cfg.themes[k].secret);
+  if(!id){ toast('No secret theme in config.json'); return; }
+  const first = !secretUnlocked();
+  store.set('roku.secret', '1'); store.set('roku.theme', id); applyTheme();
+  const g = $('#setBtn').getBoundingClientRect();
+  burst(g.left + g.width / 2, g.top + g.height / 2, true);
+  setTimeout(() => burst(innerWidth / 2, innerHeight / 2, true), 180);
+  toast(first ? `✨ Secret theme unlocked: ${labelOf(id)}` : `✨ ${labelOf(id)}`);
+}
+let gearTimer = null, gearFired = false;
+const gear = $('#setBtn');
+gear.addEventListener('pointerdown', () => { gearFired = false; gearTimer = setTimeout(() => { gearFired = true; unlockSecret(); }, 1500); });
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => gear.addEventListener(ev, () => clearTimeout(gearTimer)));
+gear.addEventListener('click', () => { if(gearFired){ gearFired = false; return; } openSettings(); });
+
+async function loadConfig(){
+  try{ const r = await api('/api/config'); if(r.error) toast(r.error); if(r.config && r.config.themes) cfg = { ...cfg, ...r.config }; }catch(e){}
+  applyTheme();
+}
+
+/* ---------- start ---------- */
+setPos(curPos());
+loadConfig();
+loadDevices(false);
+</script>
+</body>
+</html>
