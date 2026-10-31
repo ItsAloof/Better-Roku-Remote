@@ -22,9 +22,17 @@ A fast, lightweight Roku remote that runs in your phone's browser. A small Pytho
 
 ## Run it
 
-```bash
-python3 roku_remote.py
-```
+Double-click the start script for your computer:
+
+| System | File |
+|---|---|
+| Windows | `start.bat` |
+| macOS | `start.command` (the first time, right-click → **Open** to get past the "unidentified developer" warning) |
+| Linux | `start.sh` |
+
+Or run it yourself with `python3 roku_remote.py`.
+
+**On Windows, the first time it runs** a firewall prompt asks whether Python can use the network. Allow it on **Private networks**, or your phone won't be able to connect.
 
 Then open the address it prints, like `http://192.168.x.x:8080`, on your phone. On iPhone, tap Share → **Add to Home Screen** so it opens full-screen like an app.
 
