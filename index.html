@@ -407,22 +407,36 @@ function toast(msg){
   clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400);
 }
 function setDot(c){ $('#dot').className = 'dot ' + (c || ''); }
-/* Haptics. Android: vibrate(). iOS Safari has no vibrate(), but since iOS 18 toggling a
-   "switch" checkbox plays the system tick, so we tap a hidden one. */
-const hapticSwitch = (() => {
+/* Haptics.
+   Android: navigator.vibrate().
+   iOS has no vibrate(), but since iOS 18 flipping a <input type=checkbox switch> plays the
+   system tick. Safari only allows that from a real tap: the moment the finger lifts
+   (pointerup/click), not when it lands. So a press asks for a tick, and the tick plays as
+   the finger lifts. Each tick uses a fresh switch, which is the version known to work. */
+let hapticPending = false;
+const canVibrate = typeof navigator.vibrate === 'function';
+function iosTick(){
   const label = document.createElement('label');
-  label.setAttribute('aria-hidden', 'true');
-  label.style.cssText = 'position:fixed;left:-100px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+  label.setAttribute('aria-hidden', 'true'); label.style.display = 'none';
   const input = document.createElement('input');
-  input.type = 'checkbox'; input.setAttribute('switch', ''); input.tabIndex = -1;
-  label.appendChild(input); document.body.appendChild(label);
-  return label;
-})();
+  input.type = 'checkbox'; input.setAttribute('switch', '');
+  label.appendChild(input); document.head.appendChild(label);
+  try{ label.click(); }catch(e){}
+  label.remove();
+}
+function flushHaptic(){
+  if(!hapticPending) return;
+  hapticPending = false;
+  iosTick();
+}
+document.addEventListener('pointerup', flushHaptic, true);
+document.addEventListener('click', flushHaptic, true);
 function buzz(){
   if(store.get('roku.haptics', 'on') === 'off') return;
-  try{ if(navigator.vibrate && navigator.vibrate(10)) return; }catch(e){}
-  try{ hapticSwitch.click(); }catch(e){}
-  if(document.documentElement.classList.contains('fx-prism')) setTimeout(() => { try{ hapticSwitch.click(); }catch(e){} }, 70);
+  if(canVibrate){ try{ navigator.vibrate(document.documentElement.classList.contains('fx-prism') ? [10, 60, 10] : 10); }catch(e){} return; }
+  const ev = window.event;                        // already inside a tap's lift? tick now
+  if(ev && (ev.type === 'click' || ev.type === 'pointerup')){ hapticPending = false; iosTick(); return; }
+  hapticPending = true;                          // otherwise tick when the finger lifts
 }
 
 /* ---------- server calls (kept in order) ---------- */
