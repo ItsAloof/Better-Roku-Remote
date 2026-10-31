@@ -46,6 +46,18 @@ PORT=9000 python3 roku_remote.py
 
 Keep `index.html`, `config.json` and the `icons` folder in the same folder as `roku_remote.py`.
 
+## On a computer
+
+Opening the remote on a computer automatically shows the **desktop layout** at `/desktop`:
+
+- A Roku-style home screen with your real app icons, in the order you arranged them on the Roku, plus your recently opened apps. Click an app to open it on the selected Roku.
+- A remote panel you can put on the **right**, on the **left**, **floating**, or **hidden** (Settings → Remote, or press `R`).
+- The header has the Roku picker (★ sets the default), Now Playing, Search on your TV, and Power.
+- Keyboard control: arrow keys move, `Enter` is OK, `Backspace`/`Esc` is Back, `H` is Home, `Space` is Play/Pause, `,` `.` rewind/forward, `-` `+` change volume, `M` mutes, `*` is Options, `/` jumps to search. You can turn these off in Settings.
+- The same themes and animations as the phone, with app tiles that animate in and glow on hover.
+
+Settings, Roku order, names and the default are shared between the phone and desktop layouts. To switch layouts, use the link at the bottom of Settings in either one.
+
 ## Always on (start automatically)
 
 So the remote works whenever you pick up your phone, without starting anything. Run the autostart script once. Running it again turns autostart off.
