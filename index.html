@@ -235,7 +235,9 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 .hapsw{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:.01;z-index:3;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .nohap .hapsw{display:none}
 /* show search (TMDB) */
-#searchSheet{height:86vh;max-height:86vh}
+#searchSheet{height:86vh;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+#searchSheet > *{flex:none}
+.sr-scroll{flex:1 1 auto !important;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;margin:0 -16px;padding:0 16px 8px}
 .sr-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 .sr-row{height:auto;justify-content:flex-start;padding:8px;gap:12px;text-align:left}
 .sr-poster{width:46px;height:69px;object-fit:cover;border-radius:6px;background:#000;flex:none}
@@ -257,7 +259,7 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 .sr-tv{width:100%;margin:10px 0 2px;font-weight:600}
 #srHint{margin:2px 0 0}
 /* search bar stays pinned at the top of its panel */
-#searchForm{position:sticky;top:-10px;z-index:2;background:var(--sheet);padding:10px 0 8px;margin-top:-10px}
+#searchForm{margin:0 0 4px}
 #toast{
   position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);
   background:#000d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;max-width:90vw;
@@ -397,16 +399,18 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 <div class="sheet" id="searchSheet">
   <div class="grab"></div>
   <h3>Search <button data-close aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button></h3>
-  <div id="srMain">
-    <form id="searchForm" class="row" style="grid-template-columns:1fr auto">
-      <input type="search" id="searchQ" placeholder="Movies, shows, actors…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-      <button type="submit" style="height:48px;padding:0 16px">Search</button>
-    </form>
-    <p id="srHint" class="small muted"></p>
-    <div id="srResults" class="sr-list"></div>
+  <form id="searchForm" class="row" style="grid-template-columns:1fr auto">
+    <input type="search" id="searchQ" placeholder="Movies, shows, actors…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    <button type="submit" style="height:48px;padding:0 16px">Search</button>
+  </form>
+  <div class="sr-scroll" id="srScroll">
+    <div id="srMain">
+      <p id="srHint" class="small muted"></p>
+      <div id="srResults" class="sr-list"></div>
+    </div>
+    <div id="srDetail" hidden></div>
+    <p id="srCredit" class="small muted sr-credit" hidden>Search by TMDB, streaming info by JustWatch. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
   </div>
-  <div id="srDetail" hidden></div>
-  <p id="srCredit" class="small muted sr-credit" hidden>Search by TMDB, streaming info by JustWatch. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
 </div>
 
 <div class="sheet" id="appsSheet">
@@ -786,7 +790,12 @@ function srSetup(){
     : 'Results open on your TV. Add a TMDB key to secrets.json to search shows and movies here too.';
   $('#srCredit').hidden = !showSearchOn();
 }
-function srBack(){ $('#srDetail').hidden = true; $('#srMain').hidden = false; }
+let srResultsScroll = 0;
+function srBack(){
+  if($('#srDetail').hidden) return;
+  $('#srDetail').hidden = true; $('#srMain').hidden = false;
+  $('#srScroll').scrollTop = srResultsScroll;          // back to where you were in the results
+}
 $('#searchBtn').addEventListener('click', () => {
   if(!showSearchOn() && !state.ip) return toast('No Roku selected');
   srBack(); openSheet('#searchSheet'); $('#searchQ').focus({ preventScroll: true });
@@ -803,7 +812,8 @@ $('#searchQ').addEventListener('input', () => {        // results update as you 
   if(!showSearchOn()) return;
   clearTimeout(srTimer);
   const q = $('#searchQ').value.trim();
-  if(!q){ srSeq++; $('#srResults').innerHTML = ''; return; }
+  srBack();                                            // typing again goes back to the results
+  if(!q){ srSeq++; $('#srResults').innerHTML = ''; $('#srScroll').scrollTop = 0; window.scrollTo(0, 0); return; }
   srTimer = setTimeout(() => runSearch(q), 350);
 });
 /* Roku's own search screen on the TV: its results link straight into each app */
@@ -861,6 +871,7 @@ async function installedApps(){
   catch(e){ return []; }
 }
 async function showDetail(r){
+  srResultsScroll = $('#srScroll').scrollTop;
   $('#srMain').hidden = true;
   const d = $('#srDetail'); d.hidden = false; d.innerHTML = '';
   const back = document.createElement('button'); back.className = 'sr-back';
@@ -879,7 +890,7 @@ async function showDetail(r){
   tv.addEventListener('click', () => { searchOnTv(r.title); closeSheets(); });
   const where = document.createElement('div'); where.innerHTML = '<p class="muted">Finding where to watch…</p>';
   d.append(back, head, tv, where);
-  d.scrollIntoView({ block: 'start' });
+  $('#srScroll').scrollTop = 0;
   try{
     const [prov, apps] = await Promise.all([api(`/api/tmdb/providers?type=${r.type}&id=${r.id}`), installedApps()]);
     renderWhere(where, prov, apps);
