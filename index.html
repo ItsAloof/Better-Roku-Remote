@@ -149,6 +149,53 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 .sw{width:18px;height:18px;border-radius:50%;flex:none;border:1px solid rgba(255,255,255,.3)}
 .tog{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:14px;background:var(--btn);border:1px solid var(--edge);margin-bottom:8px}
 .tog input{width:20px;height:20px;accent-color:var(--ok-ring)}
+/* ===== Prism (secret theme): liquid RGB, glass buttons, rainbow edges ===== */
+@property --ang{syntax:'<angle>';inherits:true;initial-value:0deg}
+@keyframes prismSpin{to{--ang:360deg}}
+@keyframes prismHue{
+  from{filter:drop-shadow(0 0 16px #ff3dff) hue-rotate(0deg)}
+  to{filter:drop-shadow(0 0 16px #ff3dff) hue-rotate(360deg)}
+}
+@keyframes prismSlide{to{background-position:200% 0}}
+@keyframes prismPulse{50%{stroke-width:4}}
+#fxTop{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30}
+:root.fx-prism{animation:prismSpin 4s linear infinite}
+.fx-prism{--rainbow:#ff004c,#ffb300,#3dff6e,#00e5ff,#4d5bff,#ff3dff,#ff004c}
+/* glass body + a rainbow edge drawn by a masked ring, so only the border is colored */
+.fx-prism .row:not(.icons) button,.fx-prism .tog,.fx-prism .dev,.fx-prism .themes button{
+  position:relative;background:rgba(255,255,255,.07);border:1.5px solid transparent;
+  -webkit-backdrop-filter:blur(14px) saturate(170%);backdrop-filter:blur(14px) saturate(170%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -10px 18px rgba(255,255,255,.04),0 0 18px rgba(150,90,255,.35);
+}
+.fx-prism .row:not(.icons) button::before,.fx-prism .tog::before,.fx-prism .dev::before,.fx-prism .themes button::before,.fx-prism #swipe::before{
+  content:"";position:absolute;inset:-1.5px;border-radius:inherit;padding:1.5px;pointer-events:none;
+  background:conic-gradient(from var(--ang),var(--rainbow));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);
+}
+.fx-prism .row:not(.icons) button:active,.fx-prism .row:not(.icons) button.on{
+  background:rgba(255,255,255,.26);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 0 30px rgba(255,255,255,.6);
+}
+.fx-prism #ring{animation:prismHue 5s linear infinite}
+.fx-prism .wedge{fill-opacity:.88}
+.fx-prism .wedge.on{fill:#fff;fill-opacity:.92}
+.fx-prism .ok-btn{fill:rgba(255,255,255,.1);animation:prismPulse 1.6s ease-in-out infinite}
+.fx-prism .ok-btn.on{fill:rgba(255,255,255,.75)}
+.fx-prism #devName,.fx-prism .sheet h3{
+  background:linear-gradient(90deg,var(--rainbow));background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:prismSlide 3s linear infinite;
+}
+.fx-prism .sheet h3 button{color:var(--text);-webkit-text-fill-color:currentColor}
+.fx-prism .icons button svg{filter:drop-shadow(0 0 6px rgba(255,255,255,.55))}
+.fx-prism #swipe{
+  background:rgba(255,255,255,.07);border:2px solid transparent;
+  -webkit-backdrop-filter:blur(16px) saturate(170%);backdrop-filter:blur(16px) saturate(170%);
+  box-shadow:0 0 34px rgba(150,90,255,.5),inset 0 1px 0 rgba(255,255,255,.3);
+}
+.fx-prism #swipe::before{inset:-2px;padding:2px}
+.fx-prism .sheet{background:rgba(14,7,30,.72);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%)}
+.fx-still,.fx-still *{animation:none!important}
 #toast{
   position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);
   background:#000d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;max-width:90vw;
@@ -185,6 +232,7 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 </svg>
 
 <canvas id="fx"></canvas>
+<canvas id="fxTop"></canvas>
 <div class="app">
   <div class="head">
     <button class="plain power" data-key="Power" aria-label="Power"><svg width="26" height="26"><use href="#i-power"/></svg></button>
@@ -329,6 +377,7 @@ function buzz(){
   if(store.get('roku.haptics', 'on') === 'off') return;
   try{ if(navigator.vibrate && navigator.vibrate(10)) return; }catch(e){}
   try{ hapticSwitch.click(); }catch(e){}
+  if(document.documentElement.classList.contains('fx-prism')) setTimeout(() => { try{ hapticSwitch.click(); }catch(e){} }, 70);
 }
 
 /* ---------- server calls (kept in order) ---------- */
@@ -640,9 +689,10 @@ let cfg = { theme: 'default', animations: true, lock_theme: false, themes: {} };
 let appliedVars = [];
 const todayKey = () => { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const inRange = (k, r) => Array.isArray(r) && r.length === 2 && (r[0] <= r[1] ? (k >= r[0] && k <= r[1]) : (k >= r[0] || k <= r[1]));
+const secretUnlocked = () => store.get('roku.secret', '') === '1';
 function autoTheme(){
   const k = todayKey();
-  for(const [id, t] of Object.entries(cfg.themes)) if(inRange(k, t.dates)) return id;
+  for(const [id, t] of Object.entries(cfg.themes)) if(!t.secret && inRange(k, t.dates)) return id;
   return 'default';
 }
 function themeChoice(){                          // 'server' = follow config.json
@@ -651,6 +701,7 @@ function themeChoice(){                          // 'server' = follow config.jso
 function resolveTheme(choice){
   let id = choice === 'server' ? (cfg.theme || 'auto') : choice;
   if(id === 'auto') id = autoTheme();
+  if(choice !== 'server' && cfg.themes[id] && cfg.themes[id].secret && !secretUnlocked()) id = 'default';
   return cfg.themes[id] ? id : (cfg.themes.default ? 'default' : Object.keys(cfg.themes)[0]);
 }
 function animationsOn(){
@@ -664,7 +715,7 @@ const labelOf = id => (cfg.themes[id] && cfg.themes[id].label) || id;
 /* particle layer: one small canvas, paused when the app isn't visible */
 const fx = (() => {
   const cv = $('#fx'), ctx = cv.getContext('2d');
-  let spec = null, list = [], raf = 0, w = 0, h = 0, last = 0;
+  let spec = null, effect = null, list = [], raf = 0, w = 0, h = 0, last = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   function resize(){
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -689,6 +740,20 @@ const fx = (() => {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(50, t - (last || t)) / 16.67; last = t;
     ctx.clearRect(0, 0, w, h);
+    if(effect === 'prism'){                       // liquid RGB: big soft blobs drifting and cycling hue
+      const T = t / 1000, r = Math.max(w, h) * 0.55;
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1;
+      for(let i = 0; i < 5; i++){
+        const bx = w * (0.5 + 0.45 * Math.sin(T * 0.31 * (1 + i * 0.17) + i * 1.9));
+        const by = h * (0.5 + 0.45 * Math.cos(T * 0.23 * (1 + i * 0.13) + i * 2.7));
+        const hue = (T * 40 + i * 72) % 360;
+        const g = ctx.createRadialGradient(bx, by, 0, bx, by, r);
+        g.addColorStop(0, `hsla(${hue},100%,58%,.42)`); g.addColorStop(1, `hsla(${hue},100%,50%,0)`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    if(!spec) return;
     const m = spec.motion || 'fall', op = spec.opacity == null ? 0.7 : spec.opacity;
     for(let i = 0; i < list.length; i++){
       const p = list[i]; p.ph += 0.02 * dt;
@@ -707,16 +772,15 @@ const fx = (() => {
       ctx.save(); ctx.translate(x, p.y); ctx.rotate(p.tilt * Math.sin(p.ph)); ctx.fillText(p.ch, 0, 0); ctx.restore();
     }
   }
-  const start = () => { if(!raf && spec && !document.hidden){ last = 0; raf = requestAnimationFrame(frame); } };
+  const start = () => { if(!raf && (spec || effect) && !document.hidden){ last = 0; raf = requestAnimationFrame(frame); } };
   const stop = () => { cancelAnimationFrame(raf); raf = 0; };
   addEventListener('resize', resize);
   document.addEventListener('visibilitychange', () => document.hidden ? stop() : start());
   resize();
   return {
-    set(newSpec){
-      stop(); spec = newSpec || null; list = []; ctx.clearRect(0, 0, w, h);
-      if(!spec) return;
-      for(let i = 0, n = Math.min(spec.count || 20, 80); i < n; i++) list.push(make(true));
+    set(newSpec, newEffect){
+      stop(); spec = newSpec || null; effect = newEffect || null; list = []; ctx.clearRect(0, 0, w, h);
+      if(spec) for(let i = 0, n = Math.min(spec.count || 20, 80); i < n; i++) list.push(make(true));
       start();
     }
   };
@@ -728,7 +792,10 @@ function applyTheme(){
   for(const [k, v] of Object.entries(t.colors || {})){ root.style.setProperty('--' + k, v); appliedVars.push('--' + k); }
   const bg = (t.colors && t.colors.bg) || '#0a0418';
   document.querySelector('meta[name=theme-color]').content = bg;
-  fx.set(animationsOn() ? t.particles : null);
+  const moving = animationsOn();
+  root.classList.toggle('fx-prism', t.effect === 'prism');
+  root.classList.toggle('fx-still', !moving);
+  fx.set(moving ? t.particles : null, moving ? t.effect : null);
 }
 function swatch(id){
   const c = (cfg.themes[id] && cfg.themes[id].colors) || {};
@@ -742,7 +809,7 @@ function renderSettings(){
   const choice = themeChoice();
   const opts = [['server', `Server default · ${labelOf(resolveTheme('server'))}`],
                 ['auto', `Auto by date · ${labelOf(autoTheme())}`],
-                ...Object.keys(cfg.themes).map(id => [id, labelOf(id)])];
+                ...Object.keys(cfg.themes).filter(id => !cfg.themes[id].secret || secretUnlocked()).map(id => [id, labelOf(id)])];
   for(const [val, text] of opts){
     const b = document.createElement('button');
     if(val === choice) b.classList.add('sel');
@@ -755,7 +822,75 @@ function renderSettings(){
   $('#animTog').checked = animationsOn();
   $('#hapTog').checked = store.get('roku.haptics', 'on') !== 'off';
 }
-$('#setBtn').addEventListener('click', () => { renderSettings(); openSheet('#setSheet'); });
+/* tap bursts: rainbow sparks + shockwave ring wherever you press (Prism only) */
+const burst = (() => {
+  const cv = $('#fxTop'), ctx = cv.getContext('2d');
+  let sparks = [], rings = [], raf = 0, w = 0, h = 0;
+  function resize(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = innerWidth; h = innerHeight; cv.width = w * dpr; cv.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  addEventListener('resize', resize); resize();
+  const ease = t => 1 - Math.pow(1 - t, 3);
+  function frame(){
+    ctx.clearRect(0, 0, w, h); ctx.globalCompositeOperation = 'lighter';
+    rings = rings.filter(r => {
+      r.t += 1 / 34; if(r.t >= 1) return false; if(r.t <= 0) return true;
+      const c = `hsl(${(r.hue + r.t * 140) % 360},100%,65%)`;
+      ctx.globalAlpha = 1 - r.t; ctx.strokeStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 18;
+      ctx.lineWidth = 4 * (1 - r.t) + 1; ctx.beginPath(); ctx.arc(r.x, r.y, r.max * ease(r.t), 0, 6.2832); ctx.stroke();
+      return true;
+    });
+    sparks = sparks.filter(p => {
+      if(--p.life <= 0) return false;
+      p.x += p.vx; p.y += p.vy; p.vx *= 0.93; p.vy *= 0.93;
+      const c = `hsl(${p.hue},100%,66%)`;
+      ctx.globalAlpha = p.life / p.max; ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+      return true;
+    });
+    ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over';
+    if(sparks.length || rings.length) raf = requestAnimationFrame(frame); else { raf = 0; ctx.clearRect(0, 0, w, h); }
+  }
+  return (x, y, big) => {
+    const hue = Math.random() * 360, n = big ? 70 : 18;
+    for(let i = 0; i < n; i++){
+      const a = Math.random() * 6.2832, sp = (big ? 6 : 3) + Math.random() * (big ? 9 : 4), life = (big ? 55 : 26) + Math.random() * 16;
+      sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 1.4 + Math.random() * (big ? 3.2 : 2), hue: (hue + Math.random() * 180) % 360, life, max: life });
+    }
+    rings.push({ x, y, t: 0, max: big ? Math.max(w, h) * 0.75 : 64, hue });
+    if(big) rings.push({ x, y, t: -0.18, max: Math.max(w, h) * 0.5, hue: hue + 120 });
+    if(!raf) raf = requestAnimationFrame(frame);
+  };
+})();
+document.addEventListener('pointerdown', e => {
+  if(document.documentElement.classList.contains('fx-prism') && animationsOn()) burst(e.clientX, e.clientY, false);
+}, true);
+
+/* the secret: press and hold the Settings gear for 1.5 seconds */
+function unlockSecret(){
+  const id = Object.keys(cfg.themes).find(k => cfg.themes[k].secret);
+  if(!id){ toast('No secret theme in config.json'); return; }
+  const first = !secretUnlocked();
+  store.set('roku.secret', '1'); store.set('roku.theme', id); applyTheme();
+  const g = $('#setBtn').getBoundingClientRect();
+  burst(g.left + g.width / 2, g.top + g.height / 2, true);
+  setTimeout(() => burst(innerWidth / 2, innerHeight / 2, true), 180);
+  buzz();
+  toast(first ? `\u2728 Secret theme unlocked: ${labelOf(id)}` : `\u2728 ${labelOf(id)}`);
+}
+let gearTimer = null, gearFired = false;
+const gear = $('#setBtn');
+gear.addEventListener('pointerdown', () => {
+  gearFired = false;
+  gearTimer = setTimeout(() => { gearFired = true; unlockSecret(); }, 1500);
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => gear.addEventListener(ev, () => clearTimeout(gearTimer)));
+gear.addEventListener('contextmenu', e => e.preventDefault());
+gear.addEventListener('click', () => {
+  if(gearFired){ gearFired = false; return; }       // the long-press shouldn't also open Settings
+  renderSettings(); openSheet('#setSheet');
+});
 $('#animTog').addEventListener('change', e => { store.set('roku.anim', e.target.checked ? 'on' : 'off'); applyTheme(); });
 $('#hapTog').addEventListener('change', e => { store.set('roku.haptics', e.target.checked ? 'on' : 'off'); });
 

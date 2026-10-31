@@ -11,7 +11,7 @@ A fast, lightweight Roku remote that runs in your phone's browser. A small Pytho
 - **Search:** opens Roku's search results on the TV, across all your streaming apps.
 - **Keyboard:** live typing into text boxes on the TV.
 - **Multiple Rokus:** finds them automatically, and you can rename them on your phone.
-- **Seasonal themes with animations,** set up in `config.json`.
+- **Seasonal themes with animations,** set up in `config.json`, plus one hidden theme you'll have to find in the app 🤫
 - **Haptic feedback** on Android, and on iOS 18+ through a workaround.
 
 ## Requirements
@@ -58,6 +58,8 @@ The file is re-read every time the remote opens, so you don't need to restart th
 
 - `dates`: `["MM-DD", "MM-DD"]`. A range can wrap the new year, like `["12-30", "01-02"]`.
 - `colors`: `bg`, `glow`, `pad-top`, `pad-bot`, `pad-hi`, `ok`, `ok-ring`, `gap`, `sheet`. Any you leave out keep the default.
+- `secret`: `true` hides the theme from the picker until it's unlocked in the app.
+- `effect`: `"prism"` adds the liquid RGB background, glass buttons and tap bursts.
 - `particles`: `null` for none, or:
   - `chars`: emoji or symbols
   - `motion`: `fall`, `rise` or `twinkle`
