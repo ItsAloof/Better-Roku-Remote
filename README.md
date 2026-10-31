@@ -72,9 +72,9 @@ A **Raspberry Pi** works well as an always-on home for the remote: it uses very 
 
 Your computer has to stay awake for the remote to work. If it sleeps, the remote is unreachable until it wakes up.
 
-## Show search (experimental branch)
+## Show search
 
-On the `experimental-search` branch, **Search** finds movies and shows on your phone. Results show posters, ratings and which streaming services carry each title, and tapping **Open** next to a service you have installed opens that app on your Roku. The remote can't start the show itself, because Roku keeps that ability to its own app, so after it opens, use **Keyboard** to search inside the app.
+**Search** finds movies and shows on your phone. Results show posters, ratings and which streaming services carry each title, and tapping **Open** next to a service you have installed opens that app on your Roku. The remote can't start the show itself, because Roku keeps that ability to its own app, so after it opens, use **Keyboard** to search inside the app.
 
 Setup:
 
