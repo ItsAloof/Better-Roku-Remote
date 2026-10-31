@@ -16,6 +16,7 @@ import json
 import os
 import re
 import socket
+import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -247,12 +248,15 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def _send(self, status, body=b"", ctype="application/json", cache="no-store"):
-        self.send_response(status)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", cache)
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", cache)
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass    # the page closed or reloaded before we answered; nothing to do
 
     def _json(self, obj, status=200):
         self._send(status, json.dumps(obj).encode())
@@ -482,8 +486,15 @@ def main():
         print("Warning: index.html not found next to this script.")
     if not os.path.exists(CONFIG):
         print("Note: config.json not found - using the built-in default theme.")
+    class Server(ThreadingHTTPServer):
+        def handle_error(self, request, client_address):
+            # A browser hanging up mid-request is normal (closed tab, reload, phone asleep): stay quiet.
+            if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+                return
+            super().handle_error(request, client_address)
+
     try:
-        server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+        server = Server(("0.0.0.0", PORT), Handler)
     except OSError:
         print(f"Port {PORT} is already in use - the remote is probably already running")
         print("(for example in the background from autostart). Nothing else to do.")
