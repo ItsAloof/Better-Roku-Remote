@@ -129,7 +129,28 @@ button.on,button:active{background:var(--btn-hi);transform:scale(.96)}
 .dev .info{flex:1;min-width:0}
 .dev .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dev .sub{font-size:12px;color:var(--muted)}
-.dev button{width:44px;height:40px;flex:none}
+.dev button{width:40px;height:40px;flex:none}
+.dev .mv{display:flex;flex-direction:column;gap:4px;flex:none}
+.dev .mv button{width:32px;height:20px;border-radius:7px;padding:0}
+.dev .mv button:disabled{opacity:.25}
+.dev .star svg{fill:none;stroke:currentColor;stroke-width:1.8}
+.dev .star.on{color:#ffd257}
+.dev .star.on svg{fill:#ffd257}
+/* now playing */
+.np{display:flex;align-items:center;gap:12px;height:50px;padding:0 12px 0 6px;border-radius:14px;background:var(--btn);border:1px solid var(--edge)}
+.np[hidden]{display:none}
+.np img{width:50px;height:38px;object-fit:cover;border-radius:8px;background:#000;flex:none}
+.np-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.np-top{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+#npApp{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#npTime{color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.np-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}
+#npFill{height:100%;width:0;background:var(--ok-ring);border-radius:2px;transition:width .9s linear}
+.np.nobar .np-bar{display:none}
+/* settings sliders */
+.slider{padding:12px 14px;border-radius:14px;background:var(--btn);border:1px solid var(--edge);margin-bottom:8px}
+.sl-head{display:flex;justify-content:space-between;margin-bottom:10px}
+.slider input{width:100%;accent-color:var(--ok-ring)}
 input[type=text],input[type=search]{-webkit-appearance:none;appearance:none;
   width:100%;height:48px;border-radius:12px;border:1px solid var(--edge);background:rgba(0,0,0,.3);
   color:var(--text);font:inherit;font-size:17px;padding:0 12px;-webkit-user-select:text;user-select:text;
@@ -165,12 +186,12 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 :root.fx-prism{animation:prismSpin 4s linear infinite}
 .fx-prism{--rainbow:#ff004c,#ffb300,#3dff6e,#00e5ff,#4d5bff,#ff3dff,#ff004c}
 /* glass body + a rainbow edge drawn by a masked ring, so only the border is colored */
-.fx-prism .row:not(.icons) button,.fx-prism .tog,.fx-prism .dev,.fx-prism .themes button{
+.fx-prism .row:not(.icons) button,.fx-prism .tog,.fx-prism .np,.fx-prism .slider,.fx-prism .dev,.fx-prism .themes button{
   position:relative;background:rgba(255,255,255,.07);border:1.5px solid transparent;
   -webkit-backdrop-filter:blur(14px) saturate(170%);backdrop-filter:blur(14px) saturate(170%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -10px 18px rgba(255,255,255,.04),0 0 18px rgba(150,90,255,.35);
 }
-.fx-prism .row:not(.icons) button::before,.fx-prism .tog::before,.fx-prism .dev::before,.fx-prism .themes button::before,.fx-prism #swipe::before{
+.fx-prism .row:not(.icons) button::before,.fx-prism .tog::before,.fx-prism .np::before,.fx-prism .slider::before,.fx-prism .dev::before,.fx-prism .themes button::before,.fx-prism #swipe::before{
   content:"";position:absolute;inset:-1.5px;border-radius:inherit;padding:1.5px;pointer-events:none;
   background:conic-gradient(from var(--ang),var(--rainbow));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
@@ -230,6 +251,9 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
     <symbol id="i-pencil" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20l1-4.5L16.5 4l3.5 3.5L8.5 19z"/></g></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></g></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></g></symbol>
+    <symbol id="i-fav" viewBox="0 0 24 24"><path stroke-linejoin="round" d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6-4.5-4.2 6.1-.8z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></symbol>
     <symbol id="i-caret" viewBox="0 0 24 24"><path fill="currentColor" d="M6 9h12l-6 7z"/></symbol>
   </defs>
 </svg>
@@ -251,6 +275,14 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
     <button id="kbBtn" aria-label="Keyboard"><svg width="30" height="28"><use href="#i-kb"/></svg>Keyboard</button>
     <button id="appsBtn" aria-label="Apps"><svg width="26" height="26"><use href="#i-apps"/></svg>Apps</button>
     <button id="modeBtn" aria-label="Switch mode"><svg width="28" height="28"><use id="modeIcon" href="#i-dpad"/></svg><span id="modeLabel">Buttons</span></button>
+  </div>
+
+  <div id="np" class="np" hidden>
+    <img id="npIcon" alt="">
+    <div class="np-info">
+      <div class="np-top"><span id="npApp"></span><span id="npTime"></span></div>
+      <div class="np-bar"><div id="npFill"></div></div>
+    </div>
   </div>
 
   <div class="row r3">
@@ -308,6 +340,15 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
     <div class="sec" style="margin-top:0">Theme</div>
     <div class="themes" id="themeList"></div>
   </div>
+  <div class="sec">Controls</div>
+  <div class="slider">
+    <div class="sl-head"><span>Hold-to-repeat speed</span><span id="repVal" class="muted"></span></div>
+    <input type="range" id="repRange" min="1" max="5" step="1" aria-label="Hold-to-repeat speed">
+  </div>
+  <div class="slider">
+    <div class="sl-head"><span>Swipe sensitivity</span><span id="swVal" class="muted"></span></div>
+    <input type="range" id="swRange" min="1" max="5" step="1" aria-label="Swipe sensitivity">
+  </div>
   <div class="sec">Effects</div>
   <label class="tog"><span>Animations</span><input type="checkbox" switch id="animTog"></label>
   <label class="tog"><span>Haptics</span><input type="checkbox" switch id="hapTog"></label>
@@ -354,9 +395,10 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
 };
-const state = { ip: store.get('roku.ip', ''), mode: store.get('roku.mode', 'buttons'), devices: [] };
+const state = { ip: store.get('roku.ip', ''), dev: store.get('roku.dev', ''), mode: store.get('roku.mode', 'buttons'), devices: [] };
 let aliases = {}; try{ aliases = JSON.parse(store.get('roku.aliases', '{}')) || {}; }catch(e){}
-const nameOf = d => aliases[d.ip] || d.name;
+const idOf = d => d.id || d.ip;
+const nameOf = d => aliases[idOf(d)] || d.name;
 
 /* ---------- feedback ---------- */
 let toastT;
@@ -399,14 +441,25 @@ function queue(path, body, isRepeat){
   const ip = state.ip;
   chain = chain
     .then(() => api(path, { ip, ...body }))
-    .then(() => setDot('ok'), e => { setDot('err'); toast(e.message); })
+    .then(() => { setDot('ok'); pollNow(700); }, e => { setDot('err'); toast(e.message); })
     .finally(() => pending--);
 }
 function send(key, isRepeat){ buzz(); queue('/api/key', { key }, isRepeat); }
 
+/* feel settings (Settings → Controls): 5 levels each, 3 = normal */
+const REPEAT = [ { label:'Slowest', delay:520, every:230 }, { label:'Slow', delay:450, every:160 },
+                 { label:'Normal', delay:380, every:110 }, { label:'Fast', delay:300, every:80 },
+                 { label:'Fastest', delay:240, every:55 } ];
+const SWIPE = [ { label:'Low', step:.26 }, { label:'Lower', step:.2 }, { label:'Normal', step:.16 },
+                { label:'Higher', step:.12 }, { label:'High', step:.09 } ];
+const level = k => Math.min(5, Math.max(1, parseInt(store.get(k, '3'), 10) || 3));
+const repeatFeel = () => REPEAT[level('roku.repeat') - 1];
+const swipeFeel = () => SWIPE[level('roku.swipe') - 1];
+
 function holdRepeat(fn){                         // fire now, repeat while held
   fn(false);
-  let iv; const t = setTimeout(() => { iv = setInterval(() => fn(true), 110); }, 380);
+  const r = repeatFeel();
+  let iv; const t = setTimeout(() => { iv = setInterval(() => fn(true), r.every); }, r.delay);
   return () => { clearTimeout(t); clearInterval(iv); };
 }
 
@@ -473,7 +526,7 @@ pad.addEventListener('pointerdown', e => {
 
 pad.addEventListener('pointermove', e => {
   if(!g || e.pointerId !== g.id || g.mode !== 'swipe') return;
-  const step = pad.getBoundingClientRect().width * 0.16;
+  const step = pad.getBoundingClientRect().width * swipeFeel().step;
   const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
   if(Math.max(Math.abs(dx), Math.abs(dy)) < step) return;
   const k = dirOf(dx, dy);
@@ -481,7 +534,8 @@ pad.addEventListener('pointermove', e => {
   clearHold();
   send(k); showFlash(k);
   // Holding still after a swipe keeps moving that way.
-  g.holdT = setTimeout(() => { if(g) g.iv = setInterval(() => { send(k, true); showFlash(k); }, 150); }, 450);
+  const r = repeatFeel();
+  g.holdT = setTimeout(() => { if(g) g.iv = setInterval(() => { send(k, true); showFlash(k); }, Math.round(r.every * 1.35)); }, r.delay + 70);
 });
 
 function endGesture(e){
@@ -513,48 +567,101 @@ function setMode(m){
 }
 $('#modeBtn').addEventListener('click', () => { buzz(); setMode(state.mode === 'buttons' ? 'swipe' : 'buttons'); });
 
-/* ---------- devices ---------- */
-let appsCache = null;
-function selectDevice(ip){
-  state.ip = ip; store.set('roku.ip', ip); appsCache = null; setDot(''); renderHeader();
+/* ---------- devices: tracked by serial number, in your order, with a default ---------- */
+let appsCache = null, firstLoad = true;
+const getOrder = () => { try{ return JSON.parse(store.get('roku.order', '[]')) || []; }catch(e){ return []; } };
+function sortDevices(){
+  const order = getOrder(), pos = d => { const i = order.indexOf(idOf(d)); return i < 0 ? 1e9 : i; };
+  state.devices.sort((a, b) => pos(a) - pos(b) || a.name.localeCompare(b.name));
+}
+const saveOrder = () => store.set('roku.order', JSON.stringify(state.devices.map(idOf)));
+function migrateAliases(){                       // older versions keyed custom names by IP
+  let changed = false;
+  for(const d of state.devices){
+    if(idOf(d) !== d.ip && aliases[d.ip] && !aliases[idOf(d)]){ aliases[idOf(d)] = aliases[d.ip]; delete aliases[d.ip]; changed = true; }
+  }
+  if(changed) store.set('roku.aliases', JSON.stringify(aliases));
+}
+const currentDevice = () => state.devices.find(x => idOf(x) === state.dev);
+function selectDevice(d){
+  state.dev = d ? idOf(d) : ''; state.ip = d ? d.ip : '';
+  store.set('roku.dev', state.dev); store.set('roku.ip', state.ip);
+  appsCache = null; setDot(''); renderHeader();
+  np = null; renderNow(); pollNow(true);
 }
 function renderHeader(){
-  const d = state.devices.find(x => x.ip === state.ip);
+  const d = currentDevice();
   $('#devName').textContent = d ? nameOf(d) : (state.devices.length ? 'Choose a Roku' : 'No Roku found');
+}
+function iconBtn(icon, label, cls){
+  const b = document.createElement('button'); b.setAttribute('aria-label', label);
+  if(cls) b.className = cls;
+  b.innerHTML = `<svg width="18" height="18"><use href="#${icon}"/></svg>`;
+  return b;
 }
 function renderDeviceList(){
   const list = $('#devList'); list.innerHTML = '';
   if(!state.devices.length){ list.innerHTML = '<p class="muted">No Rokus found yet.</p>'; return; }
-  for(const d of state.devices){
+  const def = store.get('roku.default', '');
+  state.devices.forEach((d, i) => {
+    const id = idOf(d);
     const row = document.createElement('div');
-    row.className = 'dev' + (d.ip === state.ip ? ' sel' : '');
+    row.className = 'dev' + (id === state.dev ? ' sel' : '');
+
+    const mv = document.createElement('div'); mv.className = 'mv';
+    const up = iconBtn('i-up', 'Move up'), down = iconBtn('i-down', 'Move down');
+    up.disabled = i === 0; down.disabled = i === state.devices.length - 1;
+    const move = (e, by) => {
+      e.stopPropagation(); buzz();
+      const [x] = state.devices.splice(i, 1); state.devices.splice(i + by, 0, x);
+      saveOrder(); renderDeviceList();
+    };
+    up.addEventListener('click', e => move(e, -1)); down.addEventListener('click', e => move(e, 1));
+    mv.append(up, down);
+
     const info = document.createElement('div'); info.className = 'info';
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = nameOf(d);
     const sub = document.createElement('div'); sub.className = 'sub';
-    sub.textContent = [aliases[d.ip] ? d.name : '', d.model, d.ip].filter(Boolean).join(' · ');
+    sub.textContent = [def === id ? 'Default' : '', aliases[id] ? d.name : '', d.model, d.ip,
+                       d.limited ? 'Limited mode: basic buttons only' : ''].filter(Boolean).join(' · ');
     info.append(nm, sub);
-    const ren = document.createElement('button'); ren.setAttribute('aria-label', 'Rename');
-    ren.innerHTML = '<svg width="18" height="18"><use href="#i-pencil"/></svg>';
+
+    const star = iconBtn('i-fav', def === id ? 'Default Roku' : 'Make default', 'star' + (def === id ? ' on' : ''));
+    star.addEventListener('click', e => {
+      e.stopPropagation(); buzz();
+      if(def === id){ store.set('roku.default', ''); toast('No default Roku'); }
+      else { store.set('roku.default', id); toast(`${nameOf(d)} is now the default`); }
+      renderDeviceList();
+    });
+
+    const ren = iconBtn('i-pencil', 'Rename');
     ren.addEventListener('click', e => {
       e.stopPropagation();
       const n = prompt('Name for this Roku (leave blank to use the Roku’s own name)', nameOf(d));
       if(n === null) return;
-      if(n.trim()) aliases[d.ip] = n.trim(); else delete aliases[d.ip];
+      if(n.trim()) aliases[id] = n.trim(); else delete aliases[id];
       store.set('roku.aliases', JSON.stringify(aliases));
       renderDeviceList(); renderHeader();
     });
-    row.append(info, ren);
-    row.addEventListener('click', () => { selectDevice(d.ip); closeSheets(); });
+
+    row.append(mv, info, star, ren);
+    row.addEventListener('click', () => { selectDevice(d); closeSheets(); });
     list.appendChild(row);
-  }
+  });
 }
 async function loadDevices(refresh){
   setDot('');
   if(refresh){ $('#devName').textContent = 'Searching…'; $('#devList').innerHTML = '<p class="muted">Searching…</p>'; }
   try{
     const { devices } = await api('/api/devices' + (refresh ? '?refresh=1' : ''));
-    state.devices = devices;
-    if(!devices.some(d => d.ip === state.ip)) selectDevice(devices[0] ? devices[0].ip : '');
+    state.devices = devices; migrateAliases(); sortDevices();
+    // Opening the app always lands on your default Roku; after that, stay on whatever you picked.
+    let pick = firstLoad ? devices.find(d => idOf(d) === store.get('roku.default', '')) : null;
+    if(!pick) pick = devices.find(d => idOf(d) === state.dev)
+                  || (!state.dev && devices.find(d => d.ip === state.ip))
+                  || devices[0] || null;
+    firstLoad = false;
+    selectDevice(pick);
     if(!devices.length) toast('No Rokus found. Tap the name to search again or add by IP.');
   }catch(e){ setDot('err'); toast('Can’t reach the remote server'); }
   renderHeader(); renderDeviceList();
@@ -566,10 +673,53 @@ $('#addIp').addEventListener('click', async () => {
   if(!ip) return;
   try{
     const d = await api('/api/add', { ip: ip.trim() });
-    if(!state.devices.some(x => x.ip === d.ip)) state.devices.push(d);
-    selectDevice(d.ip); toast('Added ' + nameOf(d)); renderDeviceList();
+    state.devices = state.devices.filter(x => idOf(x) !== idOf(d) && x.ip !== d.ip);
+    state.devices.push(d); saveOrder();
+    selectDevice(d); toast('Added ' + nameOf(d)); renderDeviceList();
   }catch(err){ toast(err.message); }
 });
+
+/* ---------- now playing: polls the Roku every few seconds while the app is open ---------- */
+let np = null, npAt = 0, npTimer = 0, npBusy = false;
+const fmtTime = ms => {
+  const t = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), sec = String(t % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+};
+function renderNow(){
+  const box = $('#np');
+  if(!np || !np.app){ box.hidden = true; return; }
+  box.hidden = false;
+  const src = `/api/icon?ip=${encodeURIComponent(state.ip)}&id=${encodeURIComponent(np.app.id)}`;
+  if($('#npIcon').getAttribute('src') !== src) $('#npIcon').src = src;
+  $('#npApp').textContent = np.app.name;
+  const p = np.player, st = p && p.state;
+  let time = '', pct = null;
+  if(p && p.live) time = 'LIVE';
+  else if(p && p.duration && p.position != null && ['play', 'pause', 'buffer'].includes(st)){
+    const pos = Math.min(p.duration, p.position + (st === 'play' ? performance.now() - npAt : 0));
+    time = `${fmtTime(pos)} / ${fmtTime(p.duration)}`; pct = pos / p.duration * 100;
+    if(st === 'pause') time = '❙❙  ' + time;
+  } else if(st === 'pause') time = 'Paused';
+  $('#npTime').textContent = time;
+  box.classList.toggle('nobar', pct == null);
+  if(pct != null) $('#npFill').style.width = pct.toFixed(2) + '%';
+}
+async function pollNow(soon){
+  clearTimeout(npTimer);
+  if(soon !== undefined && soon !== false){ npTimer = setTimeout(() => pollNow(), soon === true ? 0 : soon); return; }
+  if(document.hidden || !state.ip || npBusy){ npTimer = setTimeout(() => pollNow(), 3000); return; }
+  npBusy = true;
+  const ip = state.ip;
+  try{
+    const d = await api('/api/now?ip=' + encodeURIComponent(ip));
+    if(ip === state.ip){ np = d; npAt = performance.now(); }
+  }catch(e){ if(ip === state.ip) np = null; }
+  npBusy = false;
+  renderNow();
+  npTimer = setTimeout(() => pollNow(), 3000);
+}
+setInterval(() => { if(np && np.player && np.player.state === 'play' && !document.hidden) renderNow(); }, 1000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) pollNow(true); });
 
 /* ---------- sheets ---------- */
 function openSheet(id){ $('#bg').classList.add('open'); $(id).classList.add('open'); }
@@ -595,12 +745,12 @@ $('#searchForm').addEventListener('submit', e => {
 
 /* apps: search, recents (launched from this remote), full grid */
 let appList = [];
-const recentKey = ip => 'roku.recent.' + ip;
-const getRecent = ip => { try{ return JSON.parse(store.get(recentKey(ip), '[]')) || []; }catch(e){ return []; } };
+const recentKey = () => 'roku.recent.' + (state.dev || state.ip);
+const getRecent = () => { try{ return JSON.parse(store.get(recentKey(), '[]')) || []; }catch(e){ return []; } };
 function launchApp(a){
   buzz(); queue('/api/launch', { id: a.id });
-  const ids = [a.id, ...getRecent(state.ip).filter(x => x !== a.id)].slice(0, 8);
-  store.set(recentKey(state.ip), JSON.stringify(ids));
+  const ids = [a.id, ...getRecent().filter(x => x !== a.id)].slice(0, 8);
+  store.set(recentKey(), JSON.stringify(ids));
   closeSheets();
 }
 function tile(a, ip){
@@ -618,7 +768,7 @@ function renderApps(){
   const grid = $('#appsGrid'); grid.innerHTML = '';
   shown.forEach(a => grid.appendChild(tile(a, ip)));
   if(!shown.length) grid.innerHTML = `<p class="muted">${q ? 'No apps match.' : 'No apps found.'}</p>`;
-  const recents = q ? [] : getRecent(ip).map(id => appList.find(a => a.id === id)).filter(Boolean);
+  const recents = q ? [] : getRecent().map(id => appList.find(a => a.id === id)).filter(Boolean);
   const row = $('#recentRow'); row.innerHTML = '';
   recents.forEach(a => row.appendChild(tile(a, ip)));
   $('#recentWrap').style.display = recents.length ? '' : 'none';
@@ -822,6 +972,8 @@ function renderSettings(){
     b.addEventListener('click', () => { buzz(); store.set('roku.theme', val); applyTheme(); renderSettings(); });
     list.appendChild(b);
   }
+  $('#repRange').value = level('roku.repeat'); $('#repVal').textContent = repeatFeel().label;
+  $('#swRange').value = level('roku.swipe'); $('#swVal').textContent = swipeFeel().label;
   $('#animTog').checked = animationsOn();
   $('#hapTog').checked = store.get('roku.haptics', 'on') !== 'off';
 }
@@ -895,6 +1047,8 @@ gear.addEventListener('click', () => {
   renderSettings(); openSheet('#setSheet');
 });
 $('#animTog').addEventListener('change', e => { store.set('roku.anim', e.target.checked ? 'on' : 'off'); applyTheme(); });
+$('#repRange').addEventListener('input', e => { store.set('roku.repeat', e.target.value); $('#repVal').textContent = repeatFeel().label; buzz(); });
+$('#swRange').addEventListener('input', e => { store.set('roku.swipe', e.target.value); $('#swVal').textContent = swipeFeel().label; buzz(); });
 $('#hapTog').addEventListener('change', e => { store.set('roku.haptics', e.target.checked ? 'on' : 'off'); });
 
 async function loadConfig(){

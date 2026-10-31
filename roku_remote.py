@@ -54,25 +54,43 @@ def ecp(ip, method, path, timeout=2.5):
         conn.close()
 
 
-def device_info(ip):
+def port_open(ip, timeout=0.6):
+    try:
+        with socket.create_connection((ip, ECP_PORT), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def device_info(ip, serial_hint=""):
+    """Name/model/serial for a Roku. If the Roku is in Limited mode it refuses this
+    query, so we still return a basic entry (keypresses usually work there)."""
     try:
         status, body, _ = ecp(ip, "GET", "/query/device-info", timeout=1.5)
-        if status != 200:
-            return None
-        root = ET.fromstring(body)
+        root = ET.fromstring(body) if status == 200 else None
     except (OSError, ET.ParseError, http.client.HTTPException):
-        return None
+        root, status = None, 0
+
+    if root is None:
+        if status == 0 and not port_open(ip):
+            return None                      # nothing there
+        return {"ip": ip, "id": serial_hint or ip, "name": f"Roku ({ip})", "model": "",
+                "isTv": False, "limited": True}
 
     def get(tag):
         return (root.findtext(tag) or "").strip()
 
     return {
         "ip": ip,
+        # The serial number follows the Roku if your router gives it a new IP,
+        # so the app can never quietly end up controlling a different Roku.
+        "id": get("serial-number") or get("device-id") or serial_hint or ip,
         # Same name the Roku app shows: your custom name, else the room/location
         "name": get("user-device-name") or get("user-device-location")
                 or get("friendly-device-name") or get("model-name") or ip,
         "model": get("friendly-model-name") or get("model-name"),
         "isTv": get("is-tv") == "true",
+        "limited": False,
     }
 
 
@@ -89,12 +107,14 @@ def local_ip():
 
 
 def ssdp_search(wait=1.5):
+    """Returns {ip: serial}. The serial comes from the USN line, which Rokus send
+    even in Limited mode."""
     msg = ("M-SEARCH * HTTP/1.1\r\n"
            "HOST: 239.255.255.250:1900\r\n"
            'MAN: "ssdp:discover"\r\n'
            "MX: 1\r\n"
            "ST: roku:ecp\r\n\r\n").encode()
-    found = set()
+    found = {}
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
@@ -109,7 +129,8 @@ def ssdp_search(wait=1.5):
                 continue
             m = re.search(rb"LOCATION:\s*http://([\d.]+):8060", data, re.I)
             if m:
-                found.add(m.group(1).decode())
+                usn = re.search(rb"USN:\s*uuid:roku:ecp:(\S+)", data, re.I)
+                found[m.group(1).decode()] = usn.group(1).decode() if usn else ""
     except OSError:
         pass
     finally:
@@ -121,35 +142,47 @@ def scan_subnet():
     """Fallback when multicast is blocked: try port 8060 on every /24 address."""
     me = local_ip()
     if me.startswith("127."):
-        return set()
+        return {}
     net = ipaddress.ip_network(f"{me}/24", strict=False)
 
     def probe(host):
-        try:
-            with socket.create_connection((str(host), ECP_PORT), timeout=0.4):
-                return str(host)
-        except OSError:
-            return None
+        return str(host) if port_open(str(host), 0.4) else None
 
     with ThreadPoolExecutor(max_workers=64) as pool:
-        return {ip for ip in pool.map(probe, net.hosts()) if ip}
+        return {ip: "" for ip in pool.map(probe, net.hosts()) if ip}
 
 
 def discover():
-    ips = ssdp_search() or scan_subnet()
+    found = ssdp_search() or scan_subnet()
     with _devices_lock:
-        ips |= set(_devices)          # re-check known ones (incl. manually added)
+        for ip, d in _devices.items():        # re-check known ones (incl. manually added)
+            found.setdefault(ip, d["id"] if d["id"] != ip else "")
     with ThreadPoolExecutor(max_workers=16) as pool:
-        infos = [i for i in pool.map(device_info, ips) if i]
+        infos = [i for i in pool.map(lambda kv: device_info(*kv), found.items()) if i]
     with _devices_lock:
+        _devices.clear()                       # drop stale IPs (a Roku that moved)
         for info in infos:
             _devices[info["ip"]] = info
         return sorted(_devices.values(), key=lambda d: d["name"].lower())
 
 
 def known(ip):
+    """Is ip a Roku we may talk to? If it isn't in the list yet (say the server just
+    restarted), check that it's a local address answering on the Roku port."""
     with _devices_lock:
-        return ip in _devices
+        if ip in _devices:
+            return True
+    try:
+        if not ipaddress.ip_address(ip).is_private:
+            return False
+    except ValueError:
+        return False
+    info = device_info(ip)
+    if not info:
+        return False
+    with _devices_lock:
+        _devices[ip] = info
+    return True
 
 
 def lock_for(ip):
@@ -224,6 +257,35 @@ class Handler(BaseHTTPRequestHandler):
                     devs = sorted(_devices.values(), key=lambda d: d["name"].lower())
             return self._json({"devices": devs})
 
+        if url.path == "/api/now":
+            ip = q.get("ip", [""])[0]
+            if not known(ip):
+                return self._json({"error": "Unknown Roku"}, 404)
+            out = {"app": None, "player": None}
+            try:
+                status, body, _ = ecp(ip, "GET", "/query/active-app", timeout=1.5)
+                if status == 200:
+                    app = ET.fromstring(body).find("app")
+                    if app is not None and app.get("id"):          # no id = Roku home screen
+                        out["app"] = {"id": app.get("id"), "name": (app.text or "").strip()}
+                elif status == 403:
+                    out["limited"] = True
+                if out["app"]:
+                    status, body, _ = ecp(ip, "GET", "/query/media-player", timeout=1.5)
+                    if status == 200:
+                        root = ET.fromstring(body)
+
+                        def ms(tag):
+                            m = re.match(r"\s*(\d+)", root.findtext(tag) or "")
+                            return int(m.group(1)) if m else None
+
+                        out["player"] = {"state": root.get("state"), "position": ms("position"),
+                                         "duration": ms("duration"),
+                                         "live": (root.findtext("is_live") or "").strip() == "true"}
+            except (OSError, ET.ParseError, http.client.HTTPException):
+                pass
+            return self._json(out)
+
         if url.path in ("/api/apps", "/api/icon"):
             ip = q.get("ip", [""])[0]
             if not known(ip):
@@ -231,6 +293,9 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if url.path == "/api/apps":
                     status, body, _ = ecp(ip, "GET", "/query/apps")
+                    if status == 403:
+                        return self._json({"error": "This Roku is in Limited mode, so it won't share its app list. "
+                                           "Set Control by mobile apps to Enabled to use Apps."}, 403)
                     if status != 200:
                         return self._json({"error": f"Roku answered {status}"}, 502)
                     root = ET.fromstring(body)
@@ -321,7 +386,12 @@ def main():
         print("Warning: index.html not found next to this script.")
     if not os.path.exists(CONFIG):
         print("Note: config.json not found - using the built-in default theme.")
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    try:
+        server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    except OSError:
+        print(f"Port {PORT} is already in use - the remote is probably already running")
+        print("(for example in the background from autostart). Nothing else to do.")
+        return
     threading.Thread(target=discover, daemon=True).start()   # warm the device list
     print("Roku remote is running.")
     print(f"  On your phone, open:  http://{local_ip()}:{PORT}")

@@ -8,9 +8,11 @@ A fast, lightweight Roku remote that runs in your phone's browser. A small Pytho
 - **Swipe mode:** swipe to move, tap to select, and hold after a swipe to keep scrolling.
 - **All the usual buttons:** Power, Back, Options, Home, Instant Replay, Mute, Volume, Rewind, Play/Pause and Fast-forward.
 - **Apps:** your full app list in the order you arranged it on the Roku, with search and recently launched apps.
+- **Now Playing:** shows the open app and, when the app reports it, how far into the show you are.
 - **Search:** opens Roku's search results on the TV, across all your streaming apps.
 - **Keyboard:** live typing into text boxes on the TV.
-- **Multiple Rokus:** finds them automatically, and you can rename them on your phone.
+- **Multiple Rokus:** finds them automatically. Rename them, put them in your own order, and star a default that the remote always opens on. Each Roku is tracked by its serial number, so if your router gives it a new IP address the remote never ends up controlling the wrong one.
+- **Feel settings:** hold-to-repeat speed and swipe sensitivity, in Settings → Controls.
 - **Seasonal themes with animations,** set up in `config.json`, plus one hidden theme you'll have to find in the app 🤫
 - **Haptic feedback** on Android, and on iOS 18+ through a workaround.
 
@@ -18,7 +20,7 @@ A fast, lightweight Roku remote that runs in your phone's browser. A small Pytho
 
 - Python 3.8 or newer, standard library only, so there's nothing to install.
 - Your computer and phone on the same Wi-Fi network as the Roku.
-- On the Roku: **Settings → System → Advanced system settings → Control by mobile apps → Network access** set to **Enabled** or **Permissive**. In **Limited** mode the server can't identify the Roku, so the remote can't send anything.
+- On the Roku: **Settings → System → Advanced system settings → Control by mobile apps → Network access** set to **Enabled** (recommended). In **Limited** mode the Roku blocks everything except basic buttons, so the D-pad and media keys still work, but Apps, Now Playing and the Roku's own name don't.
 
 ## Run it
 
@@ -42,7 +44,21 @@ To use a different port, set `PORT`:
 PORT=9000 python3 roku_remote.py
 ```
 
-Keep `index.html` and `config.json` in the same folder as `roku_remote.py`.
+Keep `index.html`, `config.json` and the `icons` folder in the same folder as `roku_remote.py`.
+
+## Always on (start automatically)
+
+So the remote works whenever you pick up your phone, without starting anything. Run the autostart script once. Running it again turns autostart off.
+
+| System | File | What it does |
+|---|---|---|
+| Windows | `autostart-windows.bat` | Starts the remote hidden in the background each time you log in |
+| macOS | `autostart-mac.command` | Runs it in the background at login and restarts it if it ever stops |
+| Linux / Raspberry Pi | `autostart-linux.sh` | Runs it as a background service that starts at boot and restarts if it stops |
+
+A **Raspberry Pi** works well as an always-on home for the remote: it uses very little power and never sleeps. Copy the folder over and run `./autostart-linux.sh`.
+
+Your computer has to stay awake for the remote to work. If it sleeps, the remote is unreachable until it wakes up.
 
 ## Themes (`config.json`)
 
@@ -70,6 +86,7 @@ The file is re-read every time the remote opens, so you don't need to restart th
 
 - **"Can't reach the remote server":** make sure the script is running, and that your phone is on the same network as the computer.
 - **"Roku blocked it" or presses don't work:** check the Control by mobile apps setting above. Also turn off any VPN on the computer.
+- **"Port 8080 is already in use":** the remote is already running, probably in the background from autostart. Nothing else to do.
 - **No Rokus found:** tap the device name, then **Add by IP**. You'll find the Roku's IP under **Settings → Network → About**.
 - **Volume does nothing:** volume only works on Roku TVs, or when the TV supports HDMI-CEC.
 
