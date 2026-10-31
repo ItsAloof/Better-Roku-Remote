@@ -1,0 +1,80 @@
+{
+  "_help": [
+    "Edit this file and save, then close and reopen the remote on your phone. No restart needed.",
+    "theme: 'auto' picks a theme by today's date (each theme's 'dates'), or name one, e.g. 'christmas'.",
+    "animations: true/false is the default for phones that haven't changed it in Settings.",
+    "lock_theme: true hides the theme picker on phones so everyone gets the theme set here.",
+    "To add a theme, copy one of the blocks below, give it a new key and label, and change the values.",
+    "  dates: [start, end] as MM-DD. Ranges can wrap the new year, e.g. ['12-30', '01-02'].",
+    "  colors: any you leave out keep the default. bg/glow = background, pad-* = D-pad, ok/ok-ring = OK button, sheet = pop-up panels.",
+    "  particles: null for none. chars = what floats (emoji or symbols), motion = fall | rise | twinkle,",
+    "    count, size [min, max] px, speed, opacity, and palette = colors for plain symbols (emoji keep their own)."
+  ],
+  "theme": "auto",
+  "animations": true,
+  "lock_theme": false,
+  "themes": {
+    "default": {
+      "label": "Default",
+      "colors": {
+        "bg": "#0a0418", "glow": "#2c0f66", "pad-top": "#6b33dc", "pad-bot": "#3a1092", "pad-hi": "#8a58f2",
+        "ok": "#5a24c4", "ok-ring": "#b9a0ff", "gap": "#120628", "sheet": "#1a0d36"
+      },
+      "particles": null
+    },
+    "halloween": {
+      "label": "Halloween",
+      "dates": ["10-01", "10-31"],
+      "colors": {
+        "bg": "#0c0604", "glow": "#4d1c02", "pad-top": "#f2711c", "pad-bot": "#a33b06", "pad-hi": "#ff9a4d",
+        "ok": "#3a1606", "ok-ring": "#ffb26b", "gap": "#140803", "sheet": "#22100a"
+      },
+      "particles": { "chars": ["🦇", "🎃", "👻", "🦇"], "motion": "rise", "count": 12, "size": [16, 28], "speed": 0.35, "opacity": 0.55 }
+    },
+    "thanksgiving": {
+      "label": "Thanksgiving",
+      "dates": ["11-15", "11-30"],
+      "colors": {
+        "bg": "#0f0804", "glow": "#4a2408", "pad-top": "#c9741f", "pad-bot": "#7a3a0e", "pad-hi": "#e3923d",
+        "ok": "#5b2a0b", "ok-ring": "#f2c27a", "gap": "#170b04", "sheet": "#24130a"
+      },
+      "particles": { "chars": ["🍂", "🍁"], "motion": "fall", "count": 14, "size": [16, 26], "speed": 0.5, "opacity": 0.7 }
+    },
+    "christmas": {
+      "label": "Christmas",
+      "dates": ["12-01", "12-26"],
+      "colors": {
+        "bg": "#04100b", "glow": "#0f3b26", "pad-top": "#c8283a", "pad-bot": "#7f1220", "pad-hi": "#e5485a",
+        "ok": "#145c3a", "ok-ring": "#f2d38a", "gap": "#06140d", "sheet": "#0c2218"
+      },
+      "particles": { "chars": ["❄︎", "❅︎", "❆︎", "•"], "palette": ["#ffffff"], "motion": "fall", "count": 40, "size": [8, 20], "speed": 0.8, "opacity": 0.8 }
+    },
+    "new-year": {
+      "label": "New Year",
+      "dates": ["12-30", "01-02"],
+      "colors": {
+        "bg": "#07070c", "glow": "#2b2410", "pad-top": "#c9a227", "pad-bot": "#7a5f0f", "pad-hi": "#e8c24a",
+        "ok": "#1d1a10", "ok-ring": "#ffe08a", "gap": "#0b0a06", "sheet": "#17140c"
+      },
+      "particles": { "chars": ["✦", "•", "▪", "✧"], "palette": ["#ffd76a", "#ff6ad5", "#6ae4ff", "#ffffff"], "motion": "fall", "count": 45, "size": [8, 16], "speed": 0.9, "opacity": 0.85 }
+    },
+    "valentines": {
+      "label": "Valentine's",
+      "dates": ["02-07", "02-14"],
+      "colors": {
+        "bg": "#14040b", "glow": "#5c0f33", "pad-top": "#e0437a", "pad-bot": "#9c1648", "pad-hi": "#f26c99",
+        "ok": "#6b0f34", "ok-ring": "#ffb3cd", "gap": "#1a0610", "sheet": "#2a0b1a"
+      },
+      "particles": { "chars": ["❤︎", "💕"], "palette": ["#ff7aa8", "#ffc1d6"], "motion": "rise", "count": 16, "size": [12, 24], "speed": 0.4, "opacity": 0.6 }
+    },
+    "fourth-of-july": {
+      "label": "4th of July",
+      "dates": ["07-01", "07-05"],
+      "colors": {
+        "bg": "#050816", "glow": "#13265e", "pad-top": "#2f55c9", "pad-bot": "#172d7a", "pad-hi": "#4d72e8",
+        "ok": "#b3192f", "ok-ring": "#ffffff", "gap": "#070b1c", "sheet": "#0e1633"
+      },
+      "particles": { "chars": ["★", "✦"], "palette": ["#ff4d5e", "#ffffff", "#6f9bff"], "motion": "twinkle", "count": 30, "size": [8, 18], "speed": 0.5, "opacity": 0.85 }
+    }
+  }
+}

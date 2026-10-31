@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Remote">
+<meta name="theme-color" content="#0a0418">
+<title>Remote</title>
+<script>
+  // Home-screen app: draw edge to edge (gradient behind the clock), padded by safe areas.
+  // In Safari itself we leave the bars alone so nothing gets covered.
+  if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) {
+    document.querySelector('meta[name=viewport]').content += ', viewport-fit=cover';
+    document.documentElement.classList.add('standalone');
+  }
+</script>
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0a0418; --glow:#2c0f66;
+  --btn:rgba(255,255,255,.06); --btn-hi:rgba(255,255,255,.16); --edge:rgba(255,255,255,.13);
+  --text:#f3f0fb; --muted:#a59cbf;
+  --pad-top:#6b33dc; --pad-bot:#3a1092; --pad-hi:#8a58f2; --gap:#120628;
+  --ok:#5a24c4; --ok-ring:#b9a0ff; --good:#3ecf8e; --bad:#ff5d73; --sheet:#1a0d36;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%;background:var(--bg)}
+body{
+  margin:0;min-height:100%;color:var(--text);overflow-x:hidden;
+  background:radial-gradient(120% 65% at 50% 55%, var(--glow) 0%, var(--bg) 100%) fixed;
+  transition:background .4s;
+  font:15px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  overscroll-behavior:none;touch-action:manipulation;
+}
+.app{
+  position:relative;z-index:1;width:100%;max-width:440px;margin:0 auto;
+  height:100vh;height:100dvh;
+  display:flex;flex-direction:column;gap:12px;
+  padding:10px 20px 16px;
+}
+.standalone .app{
+  padding-top:calc(env(safe-area-inset-top) + 4px);
+  padding-bottom:calc(env(safe-area-inset-bottom) + 6px);
+}
+.app > *{flex:none}
+button{
+  font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;
+  background:var(--btn);border:1px solid var(--edge);border-radius:14px;height:50px;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:background .08s,transform .08s;
+}
+button svg{pointer-events:none;flex:none}
+button.on,button:active{background:var(--btn-hi);transform:scale(.96)}
+.row{display:grid;gap:12px}
+.r2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.r3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.r4{grid-template-columns:repeat(4,minmax(0,1fr))}
+
+/* header */
+.head{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;height:48px}
+.head .plain{background:none;border:0;height:44px;width:44px;padding:0}
+.power{color:var(--bad)}
+#devBtn{background:none;border:0;height:44px;font-weight:600;font-size:17px;min-width:0;padding:0 6px}
+#devName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--good)} .dot.err{background:var(--bad)}
+
+/* icon row */
+.icons button{background:none;border:0;height:56px;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
+.icons button svg{color:var(--text)}
+.icons button:active,.icons button.on{background:var(--btn)}
+
+/* D-pad */
+.pad-wrap{flex:1 1 0 !important;min-height:0;display:flex;align-items:center;justify-content:center;container-type:size}
+#pad{position:relative;width:min(100%,46vh);aspect-ratio:1;touch-action:none}
+@supports (width:1cqmin){ #pad{width:min(100cqw,100cqh)} }
+#ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.wedge{fill:url(#padGrad);stroke:var(--gap);stroke-width:3;transition:filter .08s}
+.wedge.on{fill:var(--pad-hi)}
+.ok-btn{fill:var(--ok);stroke:var(--ok-ring);stroke-width:2;transition:fill .08s}
+.ok-btn.on{fill:var(--pad-hi)}
+.chev{fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.oklabel{fill:#fff;font-weight:700;font-size:17px;letter-spacing:.5px;pointer-events:none}
+#swipe{
+  position:absolute;inset:0;border-radius:32px;display:none;
+  background:linear-gradient(180deg,var(--pad-top),var(--pad-bot));border:1px solid rgba(255,255,255,.18);
+  flex-direction:column;gap:6px;align-items:center;justify-content:center;text-align:center;padding:24px;color:#e6dcff;
+}
+#swipe .small{color:#c7b6f5}
+.mode-swipe #swipe{display:flex}
+.mode-swipe #ring{display:none}
+#flash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:#fff;opacity:0;pointer-events:none;transition:opacity .3s}
+#flash.show{opacity:.9;transition:none}
+.small{font-size:13px}
+.muted{color:var(--muted)}
+
+/* sheets */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:10}
+.sheet-bg.open{display:block}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;max-width:440px;margin:0 auto;max-height:80vh;overflow:auto;
+  background:var(--sheet);border:1px solid var(--edge);border-bottom:0;border-radius:22px 22px 0 0;z-index:11;
+  padding:10px 16px calc(env(safe-area-inset-bottom) + 16px);transform:translateY(105%);transition:transform .2s;
+}
+.sheet.open{transform:none}
+.grab{width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.25);margin:0 auto 10px}
+.sheet h3{margin:0 0 12px;font-size:20px;display:flex;justify-content:space-between;align-items:center}
+.sheet h3 button{width:40px;height:40px;background:none;border:0}
+#appsSheet{height:86vh;max-height:86vh}
+.sheet{overflow-x:hidden}
+.sec{font-size:15px;font-weight:600;margin:14px 0 8px}
+.apps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 10px}
+.tile{min-width:0;width:100%;height:auto;padding:0;border:0;background:none;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.tile:active,.tile.on{background:none;transform:scale(.95)}
+.tile img{display:block;width:100%;max-width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:#000;border:1px solid var(--edge)}
+.tile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.recent{display:flex;gap:10px;overflow-x:auto;margin:0 -16px;padding:0 16px 4px;scrollbar-width:none}
+.recent::-webkit-scrollbar{display:none}
+.recent .tile{flex:none;width:calc((100% - 20px) / 3.3)}
+.dev{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;background:var(--btn);border:1px solid var(--edge);margin-bottom:8px}
+.dev.sel{border-color:var(--ok-ring)}
+.dev .info{flex:1;min-width:0}
+.dev .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dev .sub{font-size:12px;color:var(--muted)}
+.dev button{width:44px;height:40px;flex:none}
+input[type=text],input[type=search]{-webkit-appearance:none;appearance:none;
+  width:100%;height:48px;border-radius:12px;border:1px solid var(--edge);background:rgba(0,0,0,.3);
+  color:var(--text);font:inherit;font-size:17px;padding:0 12px;-webkit-user-select:text;user-select:text;
+}
+/* little clear (x) button inside text fields */
+.field{position:relative;min-width:0}
+.field input{padding-right:46px}
+.clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:30px;height:30px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.2)}
+.clear:active{transform:translateY(-50%) scale(.88);background:rgba(255,255,255,.3)}
+.field input:placeholder-shown + .clear{display:none}
+input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+/* animated background layer (themes) */
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+/* settings */
+.themes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.themes button{justify-content:flex-start;padding:0 12px;gap:10px;font-size:14px;min-width:0}
+.themes button span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.themes button.wide{grid-column:1/-1}
+.themes button.sel{border-color:var(--ok-ring);background:var(--btn-hi)}
+.sw{width:18px;height:18px;border-radius:50%;flex:none;border:1px solid rgba(255,255,255,.3)}
+.tog{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:14px;background:var(--btn);border:1px solid var(--edge);margin-bottom:8px}
+.tog input{width:20px;height:20px;accent-color:var(--ok-ring)}
+#toast{
+  position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);
+  background:#000d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;max-width:90vw;
+  text-align:center;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;
+}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<!-- icon set -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-power" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></g></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></g></symbol>
+    <symbol id="i-kb" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5.5" width="20" height="13" rx="2.5"/><path d="M6 9.5h0M9.5 9.5h0M13 9.5h0M16.5 9.5h0M6 13h0M18 13h0M9 15.5h6" stroke-width="2.4"/></g></symbol>
+    <symbol id="i-apps" viewBox="0 0 24 24"><g fill="currentColor"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></g></symbol>
+    <symbol id="i-dpad" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/><path d="M12 4.5l-1.6 2h3.2zM12 19.5l-1.6-2h3.2zM4.5 12l2-1.6v3.2zM19.5 12l-2-1.6v3.2z" fill="currentColor" stroke-width="1"/></g></symbol>
+    <symbol id="i-swipe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 12h10M9.5 9.5 7 12l2.5 2.5M14.5 9.5 17 12l-2.5 2.5"/></g></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 5.5 4.5 12 11 18.5"/></g></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3.2 2.5 11.4h2.8V20h5v-5.5h3.4V20h5v-8.6h2.8z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3.5v17M4.6 7.75l14.8 8.5M19.4 7.75l-14.8 8.5"/></g></symbol>
+    <symbol id="i-replay" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4v5h5"/></g></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></g></symbol>
+    <symbol id="i-voldn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 12h5"/></g></symbol>
+    <symbol id="i-volup" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 12h6M18.5 9v6"/></g></symbol>
+    <symbol id="i-rev" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 6v12L3 12zM21 6v12l-8.5-6z"/></symbol>
+    <symbol id="i-fwd" viewBox="0 0 24 24"><path fill="currentColor" d="M12.5 6v12L21 12zM3 6v12l8.5-6z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M2.5 5.5v13l9.5-6.5zM14 5.5h3v13h-3zM19 5.5h3v13h-3z"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20l1-4.5L16.5 4l3.5 3.5L8.5 19z"/></g></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></g></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></g></symbol>
+    <symbol id="i-caret" viewBox="0 0 24 24"><path fill="currentColor" d="M6 9h12l-6 7z"/></symbol>
+  </defs>
+</svg>
+
+<canvas id="fx"></canvas>
+<div class="app">
+  <div class="head">
+    <button class="plain power" data-key="Power" aria-label="Power"><svg width="26" height="26"><use href="#i-power"/></svg></button>
+    <button id="devBtn" aria-label="Choose Roku">
+      <span id="dot" class="dot"></span><span id="devName">Looking for Rokus…</span>
+      <svg width="16" height="16"><use href="#i-caret"/></svg>
+    </button>
+    <button class="plain" id="setBtn" aria-label="Settings"><svg width="24" height="24"><use href="#i-gear"/></svg></button>
+  </div>
+
+  <div class="row r4 icons">
+    <button id="searchBtn" aria-label="Search"><svg width="28" height="28"><use href="#i-search"/></svg>Search</button>
+    <button id="kbBtn" aria-label="Keyboard"><svg width="30" height="28"><use href="#i-kb"/></svg>Keyboard</button>
+    <button id="appsBtn" aria-label="Apps"><svg width="26" height="26"><use href="#i-apps"/></svg>Apps</button>
+    <button id="modeBtn" aria-label="Switch mode"><svg width="28" height="28"><use id="modeIcon" href="#i-dpad"/></svg><span id="modeLabel">Buttons</span></button>
+  </div>
+
+  <div class="row r3">
+    <button data-key="Back" aria-label="Back"><svg width="26" height="26"><use href="#i-back"/></svg></button>
+    <button data-key="Info" aria-label="Options"><svg width="24" height="24"><use href="#i-star"/></svg></button>
+    <button data-key="Home" aria-label="Home"><svg width="26" height="26"><use href="#i-home"/></svg></button>
+  </div>
+
+  <div class="pad-wrap">
+    <div id="pad">
+      <svg id="ring" viewBox="0 0 200 200">
+        <defs>
+          <linearGradient id="padGrad" x1="0" y1="0" x2="0" y2="200" gradientUnits="userSpaceOnUse">
+            <stop offset="0" style="stop-color:var(--pad-top)"/><stop offset="1" style="stop-color:var(--pad-bot)"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div id="swipe">
+        <div>Swipe to move · Tap to select</div>
+        <div class="small">Hold still after a swipe to keep scrolling</div>
+      </div>
+      <div id="flash"></div>
+    </div>
+  </div>
+
+  <div class="row r4">
+    <button data-key="InstantReplay" aria-label="Instant replay"><svg width="24" height="24"><use href="#i-replay"/></svg></button>
+    <button data-key="VolumeMute" aria-label="Mute"><svg width="24" height="24"><use href="#i-mute"/></svg></button>
+    <button data-key="VolumeDown" data-repeat aria-label="Volume down"><svg width="24" height="24"><use href="#i-voldn"/></svg></button>
+    <button data-key="VolumeUp" data-repeat aria-label="Volume up"><svg width="24" height="24"><use href="#i-volup"/></svg></button>
+  </div>
+  <div class="row r3">
+    <button data-key="Rev" aria-label="Rewind"><svg width="26" height="26"><use href="#i-rev"/></svg></button>
+    <button data-key="Play" aria-label="Play/Pause"><svg width="28" height="28"><use href="#i-play"/></svg></button>
+    <button data-key="Fwd" aria-label="Fast forward"><svg width="26" height="26"><use href="#i-fwd"/></svg></button>
+  </div>
+</div>
+
+<div class="sheet-bg" id="bg"></div>
+
+<div class="sheet" id="devSheet">
+  <div class="grab"></div>
+  <h3>Your Rokus <button data-close aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button></h3>
+  <div id="devList"></div>
+  <div class="row r2" style="margin-top:4px">
+    <button id="rescan">Search again</button>
+    <button id="addIp">Add by IP</button>
+  </div>
+</div>
+
+<div class="sheet" id="setSheet">
+  <div class="grab"></div>
+  <h3>Settings <button data-close aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button></h3>
+  <div id="themeSec">
+    <div class="sec" style="margin-top:0">Theme</div>
+    <div class="themes" id="themeList"></div>
+  </div>
+  <div class="sec">Effects</div>
+  <label class="tog"><span>Animations</span><input type="checkbox" switch id="animTog"></label>
+  <label class="tog"><span>Haptics</span><input type="checkbox" switch id="hapTog"></label>
+  <p class="small muted">Themes and defaults come from config.json next to the server script.</p>
+</div>
+
+<div class="sheet" id="searchSheet">
+  <div class="grab"></div>
+  <h3>Search <button data-close aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button></h3>
+  <form id="searchForm" class="row" style="grid-template-columns:1fr auto">
+    <input type="search" id="searchQ" placeholder="Movies, shows, actors…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    <button type="submit" style="height:48px;padding:0 16px">Search</button>
+  </form>
+  <p class="small muted">Results open on your TV, across all your streaming apps.</p>
+</div>
+
+<div class="sheet" id="appsSheet">
+  <div class="grab"></div>
+  <h3>Apps <button data-close aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button></h3>
+  <input type="search" id="appQ" placeholder="Search apps" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+  <div id="recentWrap"><div class="sec">Recent</div><div class="recent" id="recentRow"></div></div>
+  <div class="sec" id="allLabel">All apps</div>
+  <div class="apps" id="appsGrid"></div>
+</div>
+
+<div class="sheet" id="kbSheet">
+  <div class="grab"></div>
+  <h3>Keyboard <button data-close aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button></h3>
+  <input type="text" id="kbInput" placeholder="Letters go straight to the TV"
+         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+  <div class="row r3" style="margin-top:10px">
+    <button id="kbBack">⌫</button>
+    <button id="kbClear">Clear</button>
+    <button data-key="Enter">Enter</button>
+  </div>
+  <p class="small muted">Open a search or text box on the TV first.</p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+};
+const state = { ip: store.get('roku.ip', ''), mode: store.get('roku.mode', 'buttons'), devices: [] };
+let aliases = {}; try{ aliases = JSON.parse(store.get('roku.aliases', '{}')) || {}; }catch(e){}
+const nameOf = d => aliases[d.ip] || d.name;
+
+/* ---------- feedback ---------- */
+let toastT;
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400);
+}
+function setDot(c){ $('#dot').className = 'dot ' + (c || ''); }
+/* Haptics. Android: vibrate(). iOS Safari has no vibrate(), but since iOS 18 toggling a
+   "switch" checkbox plays the system tick, so we tap a hidden one. */
+const hapticSwitch = (() => {
+  const label = document.createElement('label');
+  label.setAttribute('aria-hidden', 'true');
+  label.style.cssText = 'position:fixed;left:-100px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+  const input = document.createElement('input');
+  input.type = 'checkbox'; input.setAttribute('switch', ''); input.tabIndex = -1;
+  label.appendChild(input); document.body.appendChild(label);
+  return label;
+})();
+function buzz(){
+  if(store.get('roku.haptics', 'on') === 'off') return;
+  try{ if(navigator.vibrate && navigator.vibrate(10)) return; }catch(e){}
+  try{ hapticSwitch.click(); }catch(e){}
+}
+
+/* ---------- server calls (kept in order) ---------- */
+async function api(path, body){
+  const opt = body ? { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) } : {};
+  const r = await fetch(path, opt);
+  let data = {}; try{ data = await r.json(); }catch(e){}
+  if(!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+  return data;
+}
+let chain = Promise.resolve(), pending = 0;
+function queue(path, body, isRepeat){
+  if(!state.ip){ toast('No Roku selected'); return; }
+  if(isRepeat && pending > 2) return;            // don't pile up while holding
+  pending++;
+  const ip = state.ip;
+  chain = chain
+    .then(() => api(path, { ip, ...body }))
+    .then(() => setDot('ok'), e => { setDot('err'); toast(e.message); })
+    .finally(() => pending--);
+}
+function send(key, isRepeat){ buzz(); queue('/api/key', { key }, isRepeat); }
+
+function holdRepeat(fn){                         // fire now, repeat while held
+  fn(false);
+  let iv; const t = setTimeout(() => { iv = setInterval(() => fn(true), 110); }, 380);
+  return () => { clearTimeout(t); clearInterval(iv); };
+}
+
+/* ---------- plain buttons ---------- */
+document.querySelectorAll('button[data-key]').forEach(b => {
+  const key = b.dataset.key, rep = b.hasAttribute('data-repeat');
+  let stop = null;
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault(); b.classList.add('on');
+    if(rep) stop = holdRepeat(r => send(key, r)); else send(key);
+  });
+  const end = () => { b.classList.remove('on'); if(stop){ stop(); stop = null; } };
+  ['pointerup','pointercancel','pointerleave'].forEach(ev => b.addEventListener(ev, end));
+});
+
+/* ---------- radial pad ---------- */
+const NS = 'http://www.w3.org/2000/svg', C = 100, R = 98, RI = 29;   // RI = OK size (also its tap area)
+const ring = $('#ring'), pad = $('#pad'), flash = $('#flash'), parts = {};
+const pt = (rad, deg) => [C + rad * Math.cos(deg * Math.PI / 180), C + rad * Math.sin(deg * Math.PI / 180)];
+function sector(a0, a1){
+  const [x0,y0] = pt(R,a0), [x1,y1] = pt(R,a1), [x2,y2] = pt(RI,a1), [x3,y3] = pt(RI,a0);
+  return `M${x0} ${y0}A${R} ${R} 0 0 1 ${x1} ${y1}L${x2} ${y2}A${RI} ${RI} 0 0 0 ${x3} ${y3}Z`;
+}
+const el = (tag, attrs) => { const n = document.createElementNS(NS, tag); for(const k in attrs) n.setAttribute(k, attrs[k]); ring.appendChild(n); return n; };
+for(const [k, mid] of [['Right',0],['Down',90],['Left',180],['Up',270]]){
+  parts[k] = el('path', { d: sector(mid - 45, mid + 45), class: 'wedge' });
+  const [gx, gy] = pt(66, mid);
+  el('path', { d: 'M-5 -11L6 0L-5 11', class: 'chev', transform: `translate(${gx} ${gy}) rotate(${mid})` });
+}
+parts.Select = el('circle', { cx: C, cy: C, r: RI - 4, class: 'ok-btn' });
+el('text', { x: C, y: C + 6, 'text-anchor': 'middle', class: 'oklabel' }).textContent = 'OK';
+
+const ARROW = { Up:'▲', Down:'▼', Left:'◀', Right:'▶', Select:'●' };
+function showFlash(k){
+  flash.textContent = ARROW[k]; flash.classList.add('show');
+  requestAnimationFrame(() => requestAnimationFrame(() => flash.classList.remove('show')));
+}
+const dirOf = (dx, dy) => Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'Right' : 'Left') : (dy > 0 ? 'Down' : 'Up');
+function regionAt(x, y){
+  // Whole pad counts (corners too), so you can't miss without looking.
+  const b = pad.getBoundingClientRect();
+  const dx = x - (b.left + b.width / 2), dy = y - (b.top + b.height / 2);
+  return Math.hypot(dx, dy) < (b.width / 2) * (RI / 100) ? 'Select' : dirOf(dx, dy);
+}
+
+let g = null;   // active gesture
+function clearHold(){ if(g){ clearTimeout(g.holdT); clearInterval(g.iv); } }
+
+pad.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  if(g) return;                                  // ignore extra fingers
+  try{ pad.setPointerCapture(e.pointerId); }catch(_){}
+  if(state.mode === 'buttons'){
+    const k = regionAt(e.clientX, e.clientY);
+    parts[k].classList.add('on');
+    let stop = null;
+    if(k === 'Select') send('Select'); else stop = holdRepeat(r => send(k, r));
+    g = { id: e.pointerId, mode: 'buttons', stop };
+  } else {
+    g = { id: e.pointerId, mode: 'swipe', sx: e.clientX, sy: e.clientY, x0: e.clientX, y0: e.clientY,
+          t0: performance.now(), moved: false };
+  }
+});
+
+pad.addEventListener('pointermove', e => {
+  if(!g || e.pointerId !== g.id || g.mode !== 'swipe') return;
+  const step = pad.getBoundingClientRect().width * 0.16;
+  const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+  if(Math.max(Math.abs(dx), Math.abs(dy)) < step) return;
+  const k = dirOf(dx, dy);
+  g.sx = e.clientX; g.sy = e.clientY; g.moved = true;
+  clearHold();
+  send(k); showFlash(k);
+  // Holding still after a swipe keeps moving that way.
+  g.holdT = setTimeout(() => { if(g) g.iv = setInterval(() => { send(k, true); showFlash(k); }, 150); }, 450);
+});
+
+function endGesture(e){
+  if(!g || e.pointerId !== g.id) return;
+  if(g.mode === 'buttons'){
+    if(g.stop) g.stop();
+    Object.values(parts).forEach(p => p.classList.remove('on'));
+  } else {
+    clearHold();
+    if(!g.moved && e.type === 'pointerup'){
+      const dx = e.clientX - g.x0, dy = e.clientY - g.y0, dist = Math.hypot(dx, dy);
+      if(dist < 14 && performance.now() - g.t0 < 450){ send('Select'); showFlash('Select'); }
+      else if(dist >= 28){ const k = dirOf(dx, dy); send(k); showFlash(k); }   // short flick
+    }
+  }
+  g = null;
+}
+pad.addEventListener('pointerup', endGesture);
+pad.addEventListener('pointercancel', endGesture);
+document.addEventListener('touchmove', e => { if(e.target.closest('#pad')) e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+/* ---------- mode toggle ---------- */
+function setMode(m){
+  state.mode = m; store.set('roku.mode', m);
+  pad.className = 'mode-' + m;
+  $('#modeIcon').setAttribute('href', m === 'buttons' ? '#i-dpad' : '#i-swipe');
+  $('#modeLabel').textContent = m === 'buttons' ? 'Buttons' : 'Swipe';
+}
+$('#modeBtn').addEventListener('click', () => { buzz(); setMode(state.mode === 'buttons' ? 'swipe' : 'buttons'); });
+
+/* ---------- devices ---------- */
+let appsCache = null;
+function selectDevice(ip){
+  state.ip = ip; store.set('roku.ip', ip); appsCache = null; setDot(''); renderHeader();
+}
+function renderHeader(){
+  const d = state.devices.find(x => x.ip === state.ip);
+  $('#devName').textContent = d ? nameOf(d) : (state.devices.length ? 'Choose a Roku' : 'No Roku found');
+}
+function renderDeviceList(){
+  const list = $('#devList'); list.innerHTML = '';
+  if(!state.devices.length){ list.innerHTML = '<p class="muted">No Rokus found yet.</p>'; return; }
+  for(const d of state.devices){
+    const row = document.createElement('div');
+    row.className = 'dev' + (d.ip === state.ip ? ' sel' : '');
+    const info = document.createElement('div'); info.className = 'info';
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = nameOf(d);
+    const sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = [aliases[d.ip] ? d.name : '', d.model, d.ip].filter(Boolean).join(' · ');
+    info.append(nm, sub);
+    const ren = document.createElement('button'); ren.setAttribute('aria-label', 'Rename');
+    ren.innerHTML = '<svg width="18" height="18"><use href="#i-pencil"/></svg>';
+    ren.addEventListener('click', e => {
+      e.stopPropagation();
+      const n = prompt('Name for this Roku (leave blank to use the Roku’s own name)', nameOf(d));
+      if(n === null) return;
+      if(n.trim()) aliases[d.ip] = n.trim(); else delete aliases[d.ip];
+      store.set('roku.aliases', JSON.stringify(aliases));
+      renderDeviceList(); renderHeader();
+    });
+    row.append(info, ren);
+    row.addEventListener('click', () => { selectDevice(d.ip); closeSheets(); });
+    list.appendChild(row);
+  }
+}
+async function loadDevices(refresh){
+  setDot('');
+  if(refresh){ $('#devName').textContent = 'Searching…'; $('#devList').innerHTML = '<p class="muted">Searching…</p>'; }
+  try{
+    const { devices } = await api('/api/devices' + (refresh ? '?refresh=1' : ''));
+    state.devices = devices;
+    if(!devices.some(d => d.ip === state.ip)) selectDevice(devices[0] ? devices[0].ip : '');
+    if(!devices.length) toast('No Rokus found. Tap the name to search again or add by IP.');
+  }catch(e){ setDot('err'); toast('Can’t reach the remote server'); }
+  renderHeader(); renderDeviceList();
+}
+$('#devBtn').addEventListener('click', () => { renderDeviceList(); openSheet('#devSheet'); });
+$('#rescan').addEventListener('click', () => loadDevices(true));
+$('#addIp').addEventListener('click', async () => {
+  const ip = prompt('Roku IP address (on the Roku: Settings → Network → About)');
+  if(!ip) return;
+  try{
+    const d = await api('/api/add', { ip: ip.trim() });
+    if(!state.devices.some(x => x.ip === d.ip)) state.devices.push(d);
+    selectDevice(d.ip); toast('Added ' + nameOf(d)); renderDeviceList();
+  }catch(err){ toast(err.message); }
+});
+
+/* ---------- sheets ---------- */
+function openSheet(id){ $('#bg').classList.add('open'); $(id).classList.add('open'); }
+function closeSheets(){
+  $('#bg').classList.remove('open');
+  document.querySelectorAll('.sheet').forEach(s => s.classList.remove('open'));
+  $('#kbInput').blur();
+}
+$('#bg').addEventListener('click', closeSheets);
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeSheets));
+
+/* search: sends the text to Roku's search screen */
+$('#searchBtn').addEventListener('click', () => {
+  if(!state.ip) return toast('No Roku selected');
+  $('#searchQ').value = ''; openSheet('#searchSheet'); $('#searchQ').focus();
+});
+$('#searchForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = $('#searchQ').value.trim();
+  if(!q) return;
+  buzz(); queue('/api/search', { q }); closeSheets();
+});
+
+/* apps: search, recents (launched from this remote), full grid */
+let appList = [];
+const recentKey = ip => 'roku.recent.' + ip;
+const getRecent = ip => { try{ return JSON.parse(store.get(recentKey(ip), '[]')) || []; }catch(e){ return []; } };
+function launchApp(a){
+  buzz(); queue('/api/launch', { id: a.id });
+  const ids = [a.id, ...getRecent(state.ip).filter(x => x !== a.id)].slice(0, 8);
+  store.set(recentKey(state.ip), JSON.stringify(ids));
+  closeSheets();
+}
+function tile(a, ip){
+  const b = document.createElement('button'); b.className = 'tile';
+  const img = new Image(); img.alt = ''; img.loading = 'lazy';
+  img.src = `/api/icon?ip=${encodeURIComponent(ip)}&id=${encodeURIComponent(a.id)}`;
+  const s = document.createElement('span'); s.textContent = a.name;
+  b.append(img, s);
+  b.addEventListener('click', () => launchApp(a));
+  return b;
+}
+function renderApps(){
+  const ip = state.ip, q = $('#appQ').value.trim().toLowerCase();
+  const shown = q ? appList.filter(a => a.name.toLowerCase().includes(q)) : appList;
+  const grid = $('#appsGrid'); grid.innerHTML = '';
+  shown.forEach(a => grid.appendChild(tile(a, ip)));
+  if(!shown.length) grid.innerHTML = `<p class="muted">${q ? 'No apps match.' : 'No apps found.'}</p>`;
+  const recents = q ? [] : getRecent(ip).map(id => appList.find(a => a.id === id)).filter(Boolean);
+  const row = $('#recentRow'); row.innerHTML = '';
+  recents.forEach(a => row.appendChild(tile(a, ip)));
+  $('#recentWrap').style.display = recents.length ? '' : 'none';
+  $('#allLabel').textContent = q ? 'Results' : 'All apps';
+}
+$('#appQ').addEventListener('input', renderApps);
+$('#appQ').addEventListener('keydown', e => {
+  if(e.key !== 'Enter') return;
+  e.preventDefault();
+  const q = $('#appQ').value.trim().toLowerCase();
+  const hit = q && appList.find(a => a.name.toLowerCase().includes(q));
+  if(hit) launchApp(hit);
+});
+$('#appsBtn').addEventListener('click', async () => {
+  if(!state.ip) return toast('No Roku selected');
+  $('#appQ').value = '';
+  openSheet('#appsSheet');
+  if(appsCache === state.ip){ renderApps(); return; }
+  const grid = $('#appsGrid'); grid.innerHTML = '<p class="muted">Loading…</p>';
+  $('#recentWrap').style.display = 'none';
+  try{
+    const ip = state.ip;
+    const { apps } = await api('/api/apps?ip=' + encodeURIComponent(ip));
+    appList = apps; appsCache = ip; renderApps();
+  }catch(e){ grid.innerHTML = ''; toast(e.message); }
+});
+
+/* keyboard: live typing — what you type shows up on the TV as you go */
+const kb = $('#kbInput'); let prev = '';
+$('#kbBtn').addEventListener('click', () => {
+  if(!state.ip) return toast('No Roku selected');
+  kb.value = ''; prev = ''; openSheet('#kbSheet'); kb.focus();
+});
+kb.addEventListener('input', () => {
+  const v = kb.value; let i = 0;
+  while(i < prev.length && i < v.length && prev[i] === v[i]) i++;
+  for(let n = 0; n < prev.length - i; n++) send('Backspace');
+  const add = v.slice(i);
+  if(add) queue('/api/text', { text: add });
+  prev = v;
+});
+kb.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); send('Enter'); } });
+$('#kbBack').addEventListener('pointerdown', e => {
+  e.preventDefault();                              // keep the phone keyboard open
+  if(kb.value){ kb.value = kb.value.slice(0, -1); kb.dispatchEvent(new Event('input')); }
+  else send('Backspace');
+});
+$('#kbClear').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  for(let n = 0; n < prev.length; n++) send('Backspace');
+  kb.value = ''; prev = '';
+});
+
+/* x button in every text field: clears it the same way deleting by hand would
+   (so on the keyboard sheet the TV's text is erased too) */
+document.querySelectorAll('#kbInput, #searchQ, #appQ').forEach(input => {
+  const wrap = document.createElement('div'); wrap.className = 'field';
+  input.parentNode.insertBefore(wrap, input); wrap.appendChild(input);
+  const x = document.createElement('button');
+  x.type = 'button'; x.className = 'clear'; x.setAttribute('aria-label', 'Clear text');
+  x.innerHTML = '<svg width="12" height="12"><use href="#i-close"/></svg>';
+  x.addEventListener('pointerdown', e => {
+    e.preventDefault();                          // keep the phone keyboard open
+    input.value = ''; input.dispatchEvent(new Event('input')); input.focus();
+  });
+  wrap.appendChild(x);
+});
+
+/* ---------- themes & animations (driven by the server's config.json) ---------- */
+let cfg = { theme: 'default', animations: true, lock_theme: false, themes: {} };
+let appliedVars = [];
+const todayKey = () => { const d = new Date(); return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const inRange = (k, r) => Array.isArray(r) && r.length === 2 && (r[0] <= r[1] ? (k >= r[0] && k <= r[1]) : (k >= r[0] || k <= r[1]));
+function autoTheme(){
+  const k = todayKey();
+  for(const [id, t] of Object.entries(cfg.themes)) if(inRange(k, t.dates)) return id;
+  return 'default';
+}
+function themeChoice(){                          // 'server' = follow config.json
+  return cfg.lock_theme ? 'server' : store.get('roku.theme', 'server');
+}
+function resolveTheme(choice){
+  let id = choice === 'server' ? (cfg.theme || 'auto') : choice;
+  if(id === 'auto') id = autoTheme();
+  return cfg.themes[id] ? id : (cfg.themes.default ? 'default' : Object.keys(cfg.themes)[0]);
+}
+function animationsOn(){
+  const p = store.get('roku.anim', 'server');
+  if(p === 'on') return true;
+  if(p === 'off') return false;
+  return cfg.animations !== false && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+const labelOf = id => (cfg.themes[id] && cfg.themes[id].label) || id;
+
+/* particle layer: one small canvas, paused when the app isn't visible */
+const fx = (() => {
+  const cv = $('#fx'), ctx = cv.getContext('2d');
+  let spec = null, list = [], raf = 0, w = 0, h = 0, last = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function resize(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = innerWidth; h = innerHeight; cv.width = w * dpr; cv.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  }
+  function make(initial){
+    const [s0, s1] = spec.size || [12, 24], size = rnd(s0, s1);
+    const chars = spec.chars && spec.chars.length ? spec.chars : ['•'];
+    const pal = spec.palette && spec.palette.length ? spec.palette : ['#ffffff'];
+    const m = spec.motion || 'fall';
+    const p = { x0: rnd(0, w), size, ch: chars[Math.random() * chars.length | 0], color: pal[Math.random() * pal.length | 0],
+                sp: (spec.speed || 0.5) * rnd(0.6, 1.4) * size / ((s0 + s1) / 2), ph: rnd(0, 6.28), sway: rnd(6, 22),
+                tilt: rnd(-0.4, 0.4), life: 0, ttl: rnd(2.5, 6) };
+    p.y = m === 'fall' ? (initial ? rnd(-h * 0.1, h) : -size)
+        : m === 'rise' ? (initial ? rnd(0, h * 1.1) : h + size)
+        : rnd(0, h);
+    if(m === 'twinkle' && initial) p.life = rnd(0, p.ttl);
+    return p;
+  }
+  function frame(t){
+    raf = requestAnimationFrame(frame);
+    const dt = Math.min(50, t - (last || t)) / 16.67; last = t;
+    ctx.clearRect(0, 0, w, h);
+    const m = spec.motion || 'fall', op = spec.opacity == null ? 0.7 : spec.opacity;
+    for(let i = 0; i < list.length; i++){
+      const p = list[i]; p.ph += 0.02 * dt;
+      let a = op, x = p.x0;
+      if(m === 'twinkle'){
+        p.life += dt / 60;
+        if(p.life >= p.ttl){ list[i] = make(false); continue; }
+        a = op * Math.sin(Math.PI * p.life / p.ttl);
+      } else {
+        p.y += (m === 'fall' ? 1 : -1) * p.sp * dt * 1.2;
+        x += Math.sin(p.ph) * p.sway;
+        if(p.y > h + p.size * 2 || p.y < -p.size * 2){ list[i] = make(false); continue; }
+      }
+      ctx.globalAlpha = Math.max(0, a); ctx.fillStyle = p.color;
+      ctx.font = `${p.size}px -apple-system, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+      ctx.save(); ctx.translate(x, p.y); ctx.rotate(p.tilt * Math.sin(p.ph)); ctx.fillText(p.ch, 0, 0); ctx.restore();
+    }
+  }
+  const start = () => { if(!raf && spec && !document.hidden){ last = 0; raf = requestAnimationFrame(frame); } };
+  const stop = () => { cancelAnimationFrame(raf); raf = 0; };
+  addEventListener('resize', resize);
+  document.addEventListener('visibilitychange', () => document.hidden ? stop() : start());
+  resize();
+  return {
+    set(newSpec){
+      stop(); spec = newSpec || null; list = []; ctx.clearRect(0, 0, w, h);
+      if(!spec) return;
+      for(let i = 0, n = Math.min(spec.count || 20, 80); i < n; i++) list.push(make(true));
+      start();
+    }
+  };
+})();
+
+function applyTheme(){
+  const id = resolveTheme(themeChoice()), t = cfg.themes[id] || {}, root = document.documentElement;
+  appliedVars.forEach(v => root.style.removeProperty(v)); appliedVars = [];
+  for(const [k, v] of Object.entries(t.colors || {})){ root.style.setProperty('--' + k, v); appliedVars.push('--' + k); }
+  const bg = (t.colors && t.colors.bg) || '#0a0418';
+  document.querySelector('meta[name=theme-color]').content = bg;
+  fx.set(animationsOn() ? t.particles : null);
+}
+function swatch(id){
+  const c = (cfg.themes[id] && cfg.themes[id].colors) || {};
+  const sp = document.createElement('span'); sp.className = 'sw';
+  sp.style.background = `linear-gradient(135deg, ${c['pad-top'] || '#6b33dc'}, ${c['pad-bot'] || '#3a1092'})`;
+  return sp;
+}
+function renderSettings(){
+  $('#themeSec').style.display = cfg.lock_theme ? 'none' : '';
+  const list = $('#themeList'); list.innerHTML = '';
+  const choice = themeChoice();
+  const opts = [['server', `Server default · ${labelOf(resolveTheme('server'))}`],
+                ['auto', `Auto by date · ${labelOf(autoTheme())}`],
+                ...Object.keys(cfg.themes).map(id => [id, labelOf(id)])];
+  for(const [val, text] of opts){
+    const b = document.createElement('button');
+    if(val === choice) b.classList.add('sel');
+    if(val === 'server' || val === 'auto') b.classList.add('wide');
+    const label = document.createElement('span'); label.textContent = text;
+    b.append(swatch(resolveTheme(val)), label);
+    b.addEventListener('click', () => { buzz(); store.set('roku.theme', val); applyTheme(); renderSettings(); });
+    list.appendChild(b);
+  }
+  $('#animTog').checked = animationsOn();
+  $('#hapTog').checked = store.get('roku.haptics', 'on') !== 'off';
+}
+$('#setBtn').addEventListener('click', () => { renderSettings(); openSheet('#setSheet'); });
+$('#animTog').addEventListener('change', e => { store.set('roku.anim', e.target.checked ? 'on' : 'off'); applyTheme(); });
+$('#hapTog').addEventListener('change', e => { store.set('roku.haptics', e.target.checked ? 'on' : 'off'); });
+
+async function loadConfig(){
+  try{
+    const r = await api('/api/config');
+    if(r.error) toast(r.error);
+    if(r.config && r.config.themes){ cfg = { ...cfg, ...r.config }; }
+  }catch(e){}
+  applyTheme();
+}
+
+/* ---------- start ---------- */
+loadConfig();
+setMode(state.mode === 'swipe' ? 'swipe' : 'buttons');
+loadDevices(false);
+</script>
+</body>
+</html>
