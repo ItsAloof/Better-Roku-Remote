@@ -188,6 +188,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "index.html not found next to roku_remote.py"}, 500)
             return self._send(200, body, "text/html; charset=utf-8")
 
+        if url.path.startswith("/icons/"):
+            name = os.path.basename(url.path)
+            path = os.path.join(HERE, "icons", name)
+            if not re.fullmatch(r"[\w.-]+\.png", name) or not os.path.isfile(path):
+                return self._send(404, b"", "text/plain")
+            with open(path, "rb") as f:
+                return self._send(200, f.read(), "image/png", cache="max-age=86400")
+
+        if url.path == "/manifest.webmanifest":
+            manifest = {
+                "name": "Better Roku Remote", "short_name": "Remote", "start_url": "/",
+                "display": "standalone", "background_color": "#0a0418", "theme_color": "#0a0418",
+                "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                          {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"}],
+            }
+            return self._send(200, json.dumps(manifest).encode(), "application/manifest+json")
+
         if url.path == "/api/config":
             try:
                 with open(CONFIG, encoding="utf-8") as f:
