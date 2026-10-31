@@ -74,6 +74,10 @@ Setup:
 
 This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data is provided by JustWatch.
 
+## Virtual Roku (for testing)
+
+Open the remote's address with `?fake-roku` on the end, like `http://192.168.x.x:8080/?fake-roku`, on your computer or any screen. It shows a pretend Roku TV with a home screen of apps, app pages, a video player, search and volume. While that page is open, **Virtual Roku** appears in the remote's device list, and every button, the keyboard, app launching and Now Playing work against it. It's handy for trying changes without touching your real TV. Close the page and it disappears from the list within about 30 seconds.
+
 ## Themes (`config.json`)
 
 The file is re-read every time the remote opens, so you don't need to restart the server after editing it.

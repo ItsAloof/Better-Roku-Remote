@@ -29,6 +29,7 @@ PORT = int(os.environ.get("PORT", "8080"))
 ECP_PORT = 8060
 HERE = os.path.dirname(os.path.abspath(__file__))
 INDEX = os.path.join(HERE, "index.html")
+FAKE_TV = os.path.join(HERE, "fake-roku.html")   # the virtual Roku TV screen (/?fake-roku)
 CONFIG = os.path.join(HERE, "config.json")   # themes + defaults, re-read on every page load
 SECRETS = os.path.join(HERE, "secrets.json") # your TMDB key; ignored by git, never committed
 TMDB_BASE = os.environ.get("TMDB_BASE", "https://api.themoviedb.org/3")
@@ -170,9 +171,56 @@ def discover():
         return sorted(_devices.values(), key=lambda d: d["name"].lower())
 
 
+# ------------------------------------------------- virtual Roku (/?fake-roku)
+# A pretend Roku for testing the remote without a TV. Open /?fake-roku on any screen and
+# "Virtual Roku" shows up in the remote's device list while that page is open. Presses
+# are queued here and the page picks them up (long-poll), so it reacts instantly.
+VIRTUAL = "virtual"
+VIRTUAL_APPS = [  # id, name, tile colour, text colour
+    ("12", "Netflix", "#e50914", "#fff"), ("837", "YouTube", "#ff0033", "#fff"),
+    ("2285", "Hulu", "#1ce783", "#06291a"), ("13", "Prime Video", "#00a8e1", "#fff"),
+    ("291097", "Disney+", "#113ccf", "#fff"), ("61322", "Max", "#002be7", "#fff"),
+    ("593099", "Peacock", "#1b1b1b", "#fff"), ("151908", "The Roku Channel", "#6c3ab0", "#fff"),
+]
+_v = threading.Condition()
+_v_events, _v_seq, _v_seen = [], 0, 0.0
+_v_state = {"app": None, "player": None}
+
+
+def virtual_active():
+    return time.time() - _v_seen < 30
+
+
+def virtual_push(event):
+    global _v_seq
+    with _v:
+        _v_seq += 1
+        _v_events.append((_v_seq, event))
+        del _v_events[:-200]
+        _v.notify_all()
+
+
+def virtual_device():
+    return {"ip": VIRTUAL, "id": VIRTUAL, "name": "Virtual Roku", "model": "Demo TV",
+            "isTv": True, "limited": False}
+
+
+def virtual_icon(app_id):
+    app = next((a for a in VIRTUAL_APPS if a[0] == app_id), None)
+    if not app:
+        return None
+    _, name, bg, fg = app
+    size = 34 if len(name) < 9 else 24
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 290 218"><rect width="290" height="218" fill="{bg}"/>'
+            f'<text x="145" y="118" font-family="Helvetica,Arial,sans-serif" font-weight="700" font-size="{size}" '
+            f'fill="{fg}" text-anchor="middle">{name}</text></svg>').encode()
+
+
 def known(ip):
     """Is ip a Roku we may talk to? If it isn't in the list yet (say the server just
     restarted), check that it's a local address answering on the Roku port."""
+    if ip == VIRTUAL:
+        return virtual_active()
     with _devices_lock:
         if ip in _devices:
             return True
@@ -290,11 +338,12 @@ class Handler(BaseHTTPRequestHandler):
     # ---- GET
     def do_GET(self):
         url = urlparse(self.path)
-        q = parse_qs(url.query)
+        q = parse_qs(url.query, keep_blank_values=True)
 
-        if url.path in ("/", "/index.html"):
+        if url.path in ("/", "/index.html", "/fake-roku"):
+            page = FAKE_TV if (url.path == "/fake-roku" or "fake-roku" in q) else INDEX
             try:
-                with open(INDEX, "rb") as f:
+                with open(page, "rb") as f:
                     body = f.read()
             except OSError:
                 return self._json({"error": "index.html not found next to roku_remote.py"}, 500)
@@ -353,12 +402,32 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 with _devices_lock:
                     devs = sorted(_devices.values(), key=lambda d: d["name"].lower())
+            if virtual_active():
+                devs = devs + [virtual_device()]
             return self._json({"devices": devs})
+
+        if url.path == "/api/virtual/events":       # the TV page waits here for presses
+            global _v_seen
+            _v_seen = time.time()
+            try:
+                after = int(q.get("after", ["-1"])[0])
+            except ValueError:
+                after = -1
+            with _v:
+                if 0 <= after <= _v_seq:
+                    _v.wait_for(lambda: _v_seq > after, timeout=20)
+                events = [e for n, e in _v_events if n > after] if 0 <= after <= _v_seq else []
+                seq = _v_seq
+            _v_seen = time.time()
+            return self._json({"seq": seq, "events": events,
+                               "apps": [{"id": a[0], "name": a[1], "bg": a[2], "fg": a[3]} for a in VIRTUAL_APPS]})
 
         if url.path == "/api/now":
             ip = q.get("ip", [""])[0]
             if not known(ip):
                 return self._json({"error": "Unknown Roku"}, 404)
+            if ip == VIRTUAL:
+                return self._json(_v_state)
             out = {"app": None, "player": None}
             try:
                 status, body, _ = ecp(ip, "GET", "/query/active-app", timeout=1.5)
@@ -388,6 +457,11 @@ class Handler(BaseHTTPRequestHandler):
             ip = q.get("ip", [""])[0]
             if not known(ip):
                 return self._json({"error": "Unknown Roku"}, 404)
+            if ip == VIRTUAL:
+                if url.path == "/api/apps":
+                    return self._json({"apps": [{"id": a[0], "name": a[1], "type": "appl"} for a in VIRTUAL_APPS]})
+                svg = virtual_icon(q.get("id", [""])[0])
+                return self._send(200, svg, "image/svg+xml", cache="max-age=86400") if svg else self._send(404, b"", "text/plain")
             try:
                 if url.path == "/api/apps":
                     status, body, _ = ecp(ip, "GET", "/query/apps")
@@ -438,9 +512,29 @@ class Handler(BaseHTTPRequestHandler):
                 _devices[ip] = info
             return self._json(info)
 
+        if path == "/api/virtual/state":            # the TV page reports what's playing
+            global _v_state
+            app, player = data.get("app"), data.get("player")
+            _v_state = {"app": app if isinstance(app, dict) else None,
+                        "player": player if isinstance(player, dict) else None}
+            return self._json({"ok": True})
+
         ip = str(data.get("ip", ""))
         if not known(ip):
             return self._json({"error": "Unknown Roku - tap refresh"}, 404)
+
+        if ip == VIRTUAL:
+            if path == "/api/key" and data.get("key") in KEYS:
+                virtual_push({"type": "key", "key": data["key"]})
+            elif path == "/api/launch" and APP_ID_RE.match(str(data.get("id", ""))):
+                virtual_push({"type": "launch", "id": str(data["id"])})
+            elif path == "/api/text":
+                virtual_push({"type": "text", "text": str(data.get("text", ""))[:200]})
+            elif path == "/api/search":
+                virtual_push({"type": "search", "q": str(data.get("q", ""))[:100]})
+            else:
+                return self._json({"error": "Bad request"}, 400)
+            return self._json({"ok": True})
 
         try:
             with lock_for(ip):
