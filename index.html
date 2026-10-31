@@ -1099,6 +1099,18 @@ if(new URLSearchParams(location.search).has('haptest')){
     b.addEventListener(ev, () => fire());
     box.appendChild(b);
   }
+  // 8 and 9: an invisible real switch laid over the whole button, so the finger itself taps it
+  const overlayTest = (n, label, style) => {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:relative;height:56px;display:flex;align-items:center;padding:0 16px;font-size:15px;border-radius:14px;background:var(--btn);border:1px solid var(--edge);overflow:hidden';
+    d.innerHTML = `<b style="width:22px">${n}</b>${label}`;
+    const sw = document.createElement('input'); sw.type = 'checkbox'; sw.setAttribute('switch', '');
+    sw.style.cssText = style;
+    sw.addEventListener('click', () => { d.style.background = 'var(--btn-hi)'; setTimeout(() => d.style.background = 'var(--btn)', 150); });
+    d.appendChild(sw); box.appendChild(d);
+  };
+  overlayTest('8', 'Invisible switch stretched over button', 'position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0.01;cursor:pointer');
+  overlayTest('9', 'Invisible switch scaled up over button', 'position:absolute;left:50%;top:50%;margin:0;transform:translate(-50%,-50%) scale(8,2.2);opacity:0.01;cursor:pointer');
   const real = document.createElement('label'); real.className = 'tog';
   real.innerHTML = '<span><b>7</b>&nbsp; Real switch (tap it)</span><input type="checkbox" switch>';
   box.appendChild(real);
