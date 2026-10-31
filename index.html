@@ -483,6 +483,12 @@ function queue(path, body, isRepeat){
     .finally(() => pending--);
 }
 function send(key, isRepeat){ buzz(); queue('/api/key', { key }, isRepeat); }
+/* OK works like a real remote button: down when your finger lands, up when it lifts,
+   so holding it does whatever a long press does on your Roku. */
+let okHeld = false;
+function okDown(){ if(okHeld) return; okHeld = true; buzz(); queue('/api/key', { key: 'Select', action: 'down' }); }
+function okUp(){ if(!okHeld) return; okHeld = false; queue('/api/key', { key: 'Select', action: 'up' }); }
+document.addEventListener('visibilitychange', () => { if(document.hidden) okUp(); });   // never leave OK stuck down
 
 /* feel settings (Settings → Controls): 5 levels each, 3 = normal */
 const REPEAT = [ { label:'Slowest', delay:520, every:230 }, { label:'Slow', delay:450, every:160 },
@@ -554,7 +560,7 @@ pad.addEventListener('pointerdown', e => {
     const k = regionAt(e.clientX, e.clientY);
     parts[k].classList.add('on');
     let stop = null;
-    if(k === 'Select') send('Select'); else stop = holdRepeat(r => send(k, r));
+    if(k === 'Select'){ okDown(); stop = okUp; } else stop = holdRepeat(r => send(k, r));
     g = { id: e.pointerId, mode: 'buttons', stop };
   } else {
     g = { id: e.pointerId, mode: 'swipe', sx: e.clientX, sy: e.clientY, x0: e.clientX, y0: e.clientY,

@@ -192,8 +192,16 @@ function onKey(key){
   }
   render();
 }
+let okDownAt = 0;
 function onEvent(ev){
-  if(ev.type === 'key') return onKey(ev.key);
+  if(ev.type === 'key' && ev.action === 'up'){
+    if(ev.key === 'Select' && okDownAt && tv.power){
+      const ms = Date.now() - okDownAt;
+      if(ms >= 600){ showKey(`● OK held ${(ms / 1000).toFixed(1)}s`); toast('Long press: options menu'); }
+    }
+    okDownAt = 0; return;
+  }
+  if(ev.type === 'key'){ if(ev.action === 'down' && ev.key === 'Select') okDownAt = Date.now(); return onKey(ev.key); }
   if(!tv.power) return;
   if(ev.type === 'launch'){ showKey('Launch app'); const a = apps.find(x => x.id === ev.id); if(a){ toast(`Opening ${a.name}`); openApp(a); } return; }
   if(ev.type === 'search'){ showKey('Search'); tv.screen = 'search'; tv.query = ev.q || ''; tv.showFocus = 0; return render(); }

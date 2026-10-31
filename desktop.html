@@ -388,6 +388,12 @@ function queue(path, body, isRepeat){
     .finally(() => pending--);
 }
 const send = (key, isRepeat) => queue('/api/key', { key }, isRepeat);
+/* OK: down on press, up on release, so holding it works like a long press on a real remote */
+let okHeld = false;
+function okDown(){ if(okHeld) return; okHeld = true; queue('/api/key', { key: 'Select', action: 'down' }); }
+function okUp(){ if(!okHeld) return; okHeld = false; queue('/api/key', { key: 'Select', action: 'up' }); }
+addEventListener('blur', okUp);
+document.addEventListener('visibilitychange', () => { if(document.hidden) okUp(); });
 const REPEAT = [ { delay:520, every:230 }, { delay:450, every:160 }, { delay:380, every:110 }, { delay:300, every:80 }, { delay:240, every:55 } ];
 const repeatFeel = () => REPEAT[Math.min(5, Math.max(1, parseInt(store.get('roku.repeat', '3'), 10) || 3)) - 1];
 function holdRepeat(fn){
@@ -443,7 +449,7 @@ pad.addEventListener('pointerdown', e => {
   e.preventDefault();
   const k = regionAt(e.clientX, e.clientY);
   parts[k].classList.add('on'); ripple(e.clientX, e.clientY);
-  if(k === 'Select') send('Select'); else padStop = holdRepeat(r => send(k, r));
+  if(k === 'Select'){ okDown(); padStop = okUp; } else padStop = holdRepeat(r => send(k, r));
 });
 const padEnd = () => { if(padStop){ padStop(); padStop = null; } Object.values(parts).forEach(p => p.classList.remove('on')); };
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => pad.addEventListener(ev, padEnd));
@@ -616,11 +622,12 @@ document.addEventListener('keydown', e => {
   if(!key) return;
   e.preventDefault();
   if(e.repeat && !/^(Up|Down|Left|Right|VolumeUp|VolumeDown)$/.test(key)) return;
-  send(key, e.repeat);
+  if(key === 'Select') okDown(); else send(key, e.repeat);
   if(parts[key]){ parts[key].classList.add('on'); held.add(key); }
 });
 document.addEventListener('keyup', e => {
   const key = KEYMAP[e.key];
+  if(key === 'Select') okUp();
   if(key && held.has(key)){ parts[key].classList.remove('on'); held.delete(key); }
 });
 

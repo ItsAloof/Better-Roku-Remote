@@ -530,8 +530,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "Unknown Roku - tap refresh"}, 404)
 
         if ip == VIRTUAL:
-            if path == "/api/key" and data.get("key") in KEYS:
-                virtual_push({"type": "key", "key": data["key"]})
+            if path == "/api/key" and data.get("key") in KEYS and data.get("action", "press") in ("press", "down", "up"):
+                virtual_push({"type": "key", "key": data["key"], "action": data.get("action", "press")})
             elif path == "/api/launch" and APP_ID_RE.match(str(data.get("id", ""))):
                 virtual_push({"type": "launch", "id": str(data["id"])})
             elif path == "/api/text":
@@ -546,9 +546,12 @@ class Handler(BaseHTTPRequestHandler):
             with lock_for(ip):
                 if path == "/api/key":
                     key = data.get("key")
-                    if key not in KEYS:
+                    # press = a normal tap; down/up = finger on / finger off, so the Roku
+                    # can tell a tap from a hold (e.g. long-pressing OK)
+                    verb = {"press": "keypress", "down": "keydown", "up": "keyup"}.get(data.get("action", "press"))
+                    if key not in KEYS or not verb:
                         return self._json({"error": "Unknown key"}, 400)
-                    status, _, _ = ecp(ip, "POST", f"/keypress/{key}")
+                    status, _, _ = ecp(ip, "POST", f"/{verb}/{key}")
                 elif path == "/api/launch":
                     app_id = str(data.get("id", ""))
                     if not APP_ID_RE.match(app_id):

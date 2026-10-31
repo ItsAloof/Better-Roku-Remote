@@ -4,7 +4,7 @@ A fast, lightweight Roku remote that runs in your phone's browser. A small Pytho
 
 ## Features
 
-- **Buttons mode:** a giant radial D-pad you can use without looking. The whole pad counts, corners included.
+- **Buttons mode:** a giant radial D-pad you can use without looking. The whole pad counts, corners included. OK works like a real remote button: the Roku sees when you press it and when you let go, so holding it does whatever a long press does on your Roku.
 - **Swipe mode:** swipe to move, tap to select, and hold after a swipe to keep scrolling.
 - **All the usual buttons:** Power, Back, Options, Home, Instant Replay, Mute, Volume, Rewind, Play/Pause and Fast-forward.
 - **Apps:** your full app list in the order you arranged it on the Roku, with search and recently launched apps.
