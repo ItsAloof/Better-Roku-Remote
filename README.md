@@ -60,6 +60,20 @@ A **Raspberry Pi** works well as an always-on home for the remote: it uses very 
 
 Your computer has to stay awake for the remote to work. If it sleeps, the remote is unreachable until it wakes up.
 
+## Show search (experimental branch)
+
+On the `experimental-search` branch, **Search** finds movies and shows on your phone. Results show posters, ratings and which streaming services carry each title, and tapping **Open** next to a service you have installed opens that app on your Roku. The remote can't start the show itself, because Roku keeps that ability to its own app, so after it opens, use **Keyboard** to search inside the app.
+
+Setup:
+
+1. Get a free API key from [themoviedb.org](https://www.themoviedb.org/settings/api). Either the "API Key" or the "API Read Access Token" works.
+2. Copy `secrets.example.json` to `secrets.json` and paste the key in. `secrets.json` is ignored by git, so your key never ends up on GitHub.
+3. Restart the server.
+
+`tmdb_region` in `config.json` sets which country's streaming services are listed. It defaults to `US`. Without a key, Search falls back to Roku's own search on the TV.
+
+This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability data is provided by JustWatch.
+
 ## Themes (`config.json`)
 
 The file is re-read every time the remote opens, so you don't need to restart the server after editing it.

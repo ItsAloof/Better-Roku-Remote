@@ -225,6 +225,26 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 .hapwrap > button{flex:1;min-width:0}
 .hapsw{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:.01;z-index:3;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .nohap .hapsw{display:none}
+/* show search (experimental) */
+#searchSheet{height:86vh;max-height:86vh}
+.sr-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.sr-row{height:auto;justify-content:flex-start;padding:8px;gap:12px;text-align:left}
+.sr-poster{width:46px;height:69px;object-fit:cover;border-radius:6px;background:#000;flex:none}
+.sr-meta{min-width:0;flex:1}
+.sr-t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.sr-back{height:36px;width:auto;padding:0 10px 0 4px;background:none;border:0;color:var(--muted);margin:0 0 8px -4px}
+.sr-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:6px}
+.sr-big{width:104px;height:156px;object-fit:cover;border-radius:10px;background:#000;flex:none}
+.sr-head h4{margin:0 0 4px;font-size:18px}
+.sr-ov{font-size:13px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;margin:8px 0 0;-webkit-user-select:text;user-select:text}
+.prov{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:12px;background:var(--btn);border:1px solid var(--edge);margin-bottom:8px}
+.prov img{width:36px;height:36px;border-radius:8px;flex:none;background:#000}
+.prov .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prov .ps{font-size:12px;color:var(--muted)}
+.prov button{height:36px;width:auto;padding:0 16px;flex:none;background:var(--ok);border-color:var(--ok-ring);color:#fff}
+.prov.off{opacity:.55}
+.sr-credit{margin:14px 0 0;font-size:11px}
 #toast{
   position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);
   background:#000d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;max-width:90vw;
@@ -363,11 +383,16 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 <div class="sheet" id="searchSheet">
   <div class="grab"></div>
   <h3>Search <button data-close aria-label="Close"><svg width="20" height="20"><use href="#i-close"/></svg></button></h3>
-  <form id="searchForm" class="row" style="grid-template-columns:1fr auto">
-    <input type="search" id="searchQ" placeholder="Movies, shows, actors…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-    <button type="submit" style="height:48px;padding:0 16px">Search</button>
-  </form>
-  <p class="small muted">Results open on your TV, across all your streaming apps.</p>
+  <div id="srMain">
+    <form id="searchForm" class="row" style="grid-template-columns:1fr auto">
+      <input type="search" id="searchQ" placeholder="Movies, shows, actors…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      <button type="submit" style="height:48px;padding:0 16px">Search</button>
+    </form>
+    <p id="srHint" class="small muted"></p>
+    <div id="srResults" class="sr-list"></div>
+  </div>
+  <div id="srDetail" hidden></div>
+  <p id="srCredit" class="small muted sr-credit" hidden>Search by TMDB, streaming info by JustWatch. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
 </div>
 
 <div class="sheet" id="appsSheet">
@@ -730,17 +755,140 @@ function closeSheets(){
 $('#bg').addEventListener('click', closeSheets);
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeSheets));
 
-/* search: sends the text to Roku's search screen */
+/* ---------- search: shows & movies on your phone (TMDB) — or Roku's TV search if no key ---------- */
+const IMG = 'https://image.tmdb.org/t/p/';
+const showSearchOn = () => !!cfg.tmdb;
+let srTimer = 0, srSeq = 0;
+function srSetup(){
+  $('#srHint').textContent = showSearchOn() ? '' :
+    'Results open on your TV. Add a TMDB key to secrets.json to search shows and movies here instead.';
+  $('#srHint').hidden = showSearchOn();
+  $('#srCredit').hidden = !showSearchOn();
+}
+function srBack(){ $('#srDetail').hidden = true; $('#srMain').hidden = false; }
 $('#searchBtn').addEventListener('click', () => {
-  if(!state.ip) return toast('No Roku selected');
-  $('#searchQ').value = ''; openSheet('#searchSheet'); $('#searchQ').focus();
+  if(!showSearchOn() && !state.ip) return toast('No Roku selected');
+  srBack(); openSheet('#searchSheet'); $('#searchQ').focus();
 });
 $('#searchForm').addEventListener('submit', e => {
   e.preventDefault();
   const q = $('#searchQ').value.trim();
   if(!q) return;
+  if(showSearchOn()){ $('#searchQ').blur(); clearTimeout(srTimer); runSearch(q); return; }
   buzz(); queue('/api/search', { q }); closeSheets();
 });
+$('#searchQ').addEventListener('input', () => {        // results update as you type
+  if(!showSearchOn()) return;
+  clearTimeout(srTimer);
+  const q = $('#searchQ').value.trim();
+  if(!q){ srSeq++; $('#srResults').innerHTML = ''; return; }
+  srTimer = setTimeout(() => runSearch(q), 350);
+});
+async function runSearch(q){
+  const seq = ++srSeq, list = $('#srResults');
+  if(!list.children.length) list.innerHTML = '<p class="muted">Searching…</p>';
+  try{
+    const { results } = await api('/api/tmdb/search?q=' + encodeURIComponent(q));
+    if(seq !== srSeq) return;                    // a newer search already started
+    list.innerHTML = '';
+    if(!results.length){ list.innerHTML = '<p class="muted">Nothing found.</p>'; return; }
+    results.forEach(r => list.appendChild(resultRow(r)));
+  }catch(e){ if(seq === srSeq){ list.innerHTML = ''; toast(e.message); } }
+}
+function posterImg(path, size, cls){
+  const img = new Image(); img.className = cls; img.alt = ''; img.loading = 'lazy';
+  if(path) img.src = IMG + size + path;
+  return img;
+}
+const kindLabel = r => r.type === 'tv' ? 'TV show' : 'Movie';
+function resultRow(r){
+  const b = document.createElement('button'); b.className = 'sr-row';
+  const meta = document.createElement('div'); meta.className = 'sr-meta';
+  const t = document.createElement('div'); t.className = 'sr-t'; t.textContent = r.title;
+  const sub = document.createElement('div'); sub.className = 'sr-sub';
+  sub.textContent = [r.year, kindLabel(r), r.rating ? '★ ' + r.rating : ''].filter(Boolean).join(' · ');
+  meta.append(t, sub);
+  b.append(posterImg(r.poster, 'w92', 'sr-poster'), meta);
+  b.addEventListener('click', () => showDetail(r));
+  return b;
+}
+
+/* match a streaming service's name to an app installed on this Roku */
+const normName = n => (n || '').toLowerCase()
+  .replace(/\bhbo max\b/g, 'max').replace(/\bamazon video\b/g, 'prime video')   // renamed services
+  .replace(/\bplus\b/g, '+').replace(/&/g, 'and')
+  .replace(/\b(amazon|premium|with ads|ad[- ]?free|standard|essential|basic|channel|app|tv|streaming|the)\b/g, '')
+  .replace(/[^a-z0-9+]/g, '');
+function findApp(name, apps){
+  const p = normName(name);
+  if(!p) return null;
+  return apps.find(a => normName(a.name) === p)
+      || apps.find(a => { const n = normName(a.name); return n.length >= 3 && p.length >= 3 && (n.startsWith(p) || p.startsWith(n)); })
+      || null;
+}
+async function installedApps(){
+  if(!state.ip) return [];
+  if(appsCache === state.ip && appList.length) return appList;
+  try{ const { apps } = await api('/api/apps?ip=' + encodeURIComponent(state.ip)); appList = apps; appsCache = state.ip; return apps; }
+  catch(e){ return []; }
+}
+async function showDetail(r){
+  $('#srMain').hidden = true;
+  const d = $('#srDetail'); d.hidden = false; d.innerHTML = '';
+  const back = document.createElement('button'); back.className = 'sr-back';
+  back.innerHTML = '<svg width="18" height="18"><use href="#i-back"/></svg> Results';
+  back.addEventListener('click', srBack);
+  const head = document.createElement('div'); head.className = 'sr-head';
+  const info = document.createElement('div');
+  const h = document.createElement('h4'); h.textContent = r.title;
+  const sub = document.createElement('div'); sub.className = 'sr-sub';
+  sub.textContent = [r.year, kindLabel(r), r.rating ? '★ ' + r.rating : ''].filter(Boolean).join(' · ');
+  const ov = document.createElement('p'); ov.className = 'sr-ov'; ov.textContent = r.overview || '';
+  info.append(h, sub, ov);
+  head.append(posterImg(r.poster, 'w185', 'sr-big'), info);
+  const where = document.createElement('div'); where.innerHTML = '<p class="muted">Finding where to watch…</p>';
+  d.append(back, head, where);
+  d.scrollIntoView({ block: 'start' });
+  try{
+    const [prov, apps] = await Promise.all([api(`/api/tmdb/providers?type=${r.type}&id=${r.id}`), installedApps()]);
+    renderWhere(where, prov, apps);
+  }catch(e){ where.innerHTML = ''; toast(e.message); }
+}
+function renderWhere(where, prov, apps){
+  where.innerHTML = '';
+  const seen = new Set();
+  const take = list => (list || []).filter(p => !seen.has(p.id) && seen.add(p.id));
+  const sections = [['Stream', [...take(prov.flatrate), ...take(prov.free), ...take(prov.ads)]],
+                    ['Rent or buy', take([...(prov.rent || []), ...(prov.buy || [])])]];
+  let any = false;
+  for(const [title, list] of sections){
+    if(!list.length) continue;
+    any = true;
+    const sec = document.createElement('div'); sec.className = 'sec'; sec.textContent = title;
+    where.appendChild(sec);
+    const rows = list.map(p => ({ p, app: findApp(p.name, apps) }))
+                     .sort((x, y) => (y.app ? 1 : 0) - (x.app ? 1 : 0));   // installed apps first
+    for(const { p, app } of rows){
+      const row = document.createElement('div'); row.className = 'prov' + (app ? '' : ' off');
+      const logo = new Image(); logo.alt = ''; logo.loading = 'lazy'; if(p.logo) logo.src = IMG + 'w92' + p.logo;
+      const txt = document.createElement('div'); txt.className = 'pn';
+      txt.innerHTML = `<div></div><div class="ps">${app ? 'On this Roku' : 'Not installed on this Roku'}</div>`;
+      txt.firstChild.textContent = p.name;
+      row.append(logo, txt);
+      if(app){
+        const open = document.createElement('button'); open.textContent = 'Open';
+        open.addEventListener('click', () => {
+          buzz(); queue('/api/launch', { id: app.id });
+          toast(`Opening ${app.name}. Use Keyboard to search for it there.`);
+          closeSheets();
+        });
+        row.appendChild(open);
+      }
+      where.appendChild(row);
+    }
+  }
+  if(!any) where.innerHTML = `<p class="muted">Not streaming anywhere in your region (${prov.region}) right now.</p>`;
+}
 
 /* apps: search, recents (launched from this remote), full grid */
 let appList = [];
@@ -1057,6 +1205,7 @@ async function loadConfig(){
     if(r.config && r.config.themes){ cfg = { ...cfg, ...r.config }; }
   }catch(e){}
   applyTheme();
+  srSetup();
 }
 
 /* ---------- iOS haptic overlays ---------- */

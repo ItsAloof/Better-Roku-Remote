@@ -18,16 +18,20 @@ import re
 import socket
 import threading
 import time
+import urllib.error
+import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 PORT = int(os.environ.get("PORT", "8080"))
 ECP_PORT = 8060
 HERE = os.path.dirname(os.path.abspath(__file__))
 INDEX = os.path.join(HERE, "index.html")
 CONFIG = os.path.join(HERE, "config.json")   # themes + defaults, re-read on every page load
+SECRETS = os.path.join(HERE, "secrets.json") # your TMDB key; ignored by git, never committed
+TMDB_BASE = os.environ.get("TMDB_BASE", "https://api.themoviedb.org/3")
 
 KEYS = {
     "Home", "Back", "Select", "Up", "Down", "Left", "Right", "Info",
@@ -190,6 +194,81 @@ def lock_for(ip):
         return _send_locks.setdefault(ip, threading.Lock())
 
 
+# ---------------------------------------------------------- TMDB (show search)
+_tmdb_cache = {}                 # url -> (time, data); keeps repeat searches instant
+_tmdb_lock = threading.Lock()
+
+
+def tmdb_settings():
+    """(key, region). Key comes from TMDB_API_KEY or secrets.json; region from config.json."""
+    key = os.environ.get("TMDB_API_KEY", "").strip()
+    if not key:
+        try:
+            with open(SECRETS, encoding="utf-8") as f:
+                key = str(json.load(f).get("tmdb_api_key", "")).strip()
+        except (OSError, ValueError):
+            key = ""
+    region = "US"
+    try:
+        with open(CONFIG, encoding="utf-8") as f:
+            region = str(json.load(f).get("tmdb_region", "US")).upper()[:2] or "US"
+    except (OSError, ValueError):
+        pass
+    return key, region
+
+
+def tmdb_get(path, params):
+    key, _ = tmdb_settings()
+    if not key:
+        raise LookupError("no key")
+    headers = {"Accept": "application/json"}
+    if key.startswith("eyJ"):                  # v4 "API Read Access Token"
+        headers["Authorization"] = "Bearer " + key
+    else:                                      # v3 "API Key"
+        params = {**params, "api_key": key}
+    url = f"{TMDB_BASE}{path}?{urlencode(params)}"
+    now = time.time()
+    with _tmdb_lock:
+        hit = _tmdb_cache.get(url)
+        if hit and now - hit[0] < 600:
+            return hit[1]
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=8) as r:
+        data = json.load(r)
+    with _tmdb_lock:
+        if len(_tmdb_cache) > 300:
+            _tmdb_cache.clear()
+        _tmdb_cache[url] = (now, data)
+    return data
+
+
+def tmdb_search(q):
+    data = tmdb_get("/search/multi", {"query": q, "include_adult": "false", "language": "en-US", "page": 1})
+    out = []
+    for r in data.get("results", []):
+        kind = r.get("media_type")
+        if kind not in ("movie", "tv"):
+            continue
+        date = r.get("release_date") or r.get("first_air_date") or ""
+        out.append({
+            "id": r.get("id"), "type": kind,
+            "title": r.get("title") or r.get("name") or "",
+            "year": date[:4], "overview": r.get("overview") or "",
+            "poster": r.get("poster_path"), "rating": round(r.get("vote_average") or 0, 1),
+        })
+    return out[:20]
+
+
+def tmdb_providers(kind, tmdb_id):
+    _, region = tmdb_settings()
+    data = tmdb_get(f"/{kind}/{int(tmdb_id)}/watch/providers", {})
+    here = data.get("results", {}).get(region, {})
+    groups = {}
+    for group in ("flatrate", "free", "ads", "rent", "buy"):
+        groups[group] = [{"id": p.get("provider_id"), "name": p.get("provider_name"), "logo": p.get("logo_path")}
+                         for p in sorted(here.get(group, []), key=lambda p: p.get("display_priority", 99))]
+    return {"region": region, "link": here.get("link"), **groups}
+
+
 # --------------------------------------------------------------- HTTP server
 class Handler(BaseHTTPRequestHandler):
     server_version = "RokuRemote/1.0"
@@ -238,10 +317,29 @@ class Handler(BaseHTTPRequestHandler):
             }
             return self._send(200, json.dumps(manifest).encode(), "application/manifest+json")
 
+        if url.path in ("/api/tmdb/search", "/api/tmdb/providers"):
+            try:
+                if url.path == "/api/tmdb/search":
+                    query = q.get("q", [""])[0].strip()[:100]
+                    return self._json({"results": tmdb_search(query) if query else []})
+                kind, tid = q.get("type", [""])[0], q.get("id", [""])[0]
+                if kind not in ("movie", "tv") or not tid.isdigit():
+                    return self._json({"error": "Bad request"}, 400)
+                return self._json(tmdb_providers(kind, tid))
+            except LookupError:
+                return self._json({"error": "Add your TMDB key to secrets.json to search shows."}, 503)
+            except urllib.error.HTTPError as e:
+                msg = "TMDB didn't accept the key in secrets.json." if e.code == 401 else f"TMDB answered {e.code}."
+                return self._json({"error": msg}, 502)
+            except (OSError, ValueError):
+                return self._json({"error": "Couldn't reach TMDB. Is the computer online?"}, 502)
+
         if url.path == "/api/config":
             try:
                 with open(CONFIG, encoding="utf-8") as f:
-                    return self._json({"config": json.load(f)})
+                    cfg = json.load(f)
+                    cfg["tmdb"] = bool(tmdb_settings()[0])     # tells the app whether show search is set up
+                    return self._json({"config": cfg})
             except FileNotFoundError:
                 return self._json({"config": None})
             except (OSError, ValueError) as e:
