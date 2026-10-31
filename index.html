@@ -245,6 +245,8 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 .prov button{height:36px;width:auto;padding:0 16px;flex:none;background:var(--ok);border-color:var(--ok-ring);color:#fff}
 .prov.off{opacity:.55}
 .sr-credit{margin:14px 0 0;font-size:11px}
+/* search bar stays pinned at the top of its panel */
+#searchForm{position:sticky;top:-10px;z-index:2;background:var(--sheet);padding:10px 0 8px;margin-top:-10px}
 #toast{
   position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);
   background:#000d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;max-width:90vw;
@@ -748,6 +750,7 @@ document.addEventListener('visibilitychange', () => { if(!document.hidden) pollN
 /* ---------- sheets ---------- */
 function openSheet(id){ $('#bg').classList.add('open'); $(id).classList.add('open'); }
 function closeSheets(){
+  setTimeout(fitSheet, 0);
   $('#bg').classList.remove('open');
   document.querySelectorAll('.sheet').forEach(s => s.classList.remove('open'));
   $('#kbInput').blur();
@@ -768,7 +771,7 @@ function srSetup(){
 function srBack(){ $('#srDetail').hidden = true; $('#srMain').hidden = false; }
 $('#searchBtn').addEventListener('click', () => {
   if(!showSearchOn() && !state.ip) return toast('No Roku selected');
-  srBack(); openSheet('#searchSheet'); $('#searchQ').focus();
+  srBack(); openSheet('#searchSheet'); $('#searchQ').focus({ preventScroll: true });
 });
 $('#searchForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -947,7 +950,7 @@ $('#appsBtn').addEventListener('click', async () => {
 const kb = $('#kbInput'); let prev = '';
 $('#kbBtn').addEventListener('click', () => {
   if(!state.ip) return toast('No Roku selected');
-  kb.value = ''; prev = ''; openSheet('#kbSheet'); kb.focus();
+  kb.value = ''; prev = ''; openSheet('#kbSheet'); kb.focus({ preventScroll: true });
 });
 kb.addEventListener('input', () => {
   const v = kb.value; let i = 0;
@@ -1235,6 +1238,33 @@ if(!canVibrate){
 }
 const syncHaptics = () => document.documentElement.classList.toggle('nohap', store.get('roku.haptics', 'on') === 'off');
 syncHaptics();
+
+/* ---------- keep the open panel above the phone's keyboard ----------
+   When the keyboard opens, iOS shrinks the visible area and scrolls the page, which pushed
+   the panel's text box out of view. While the keyboard is up, the open panel is sized and
+   placed to fit exactly the part of the screen you can still see. */
+function fitSheet(){
+  const vv = window.visualViewport;
+  if(!vv) return;
+  const open = document.querySelector('.sheet.open');
+  const kbUp = vv.height < window.innerHeight - 100;
+  document.querySelectorAll('.sheet').forEach(sh => {
+    if(sh === open && kbUp){
+      const h = Math.round(vv.height - 8);
+      sh.style.top = Math.round(vv.offsetTop + 8) + 'px'; sh.style.bottom = 'auto';
+      sh.style.height = h + 'px'; sh.style.maxHeight = h + 'px';
+    } else {
+      sh.style.top = sh.style.bottom = sh.style.height = sh.style.maxHeight = '';
+    }
+  });
+}
+if(window.visualViewport){
+  visualViewport.addEventListener('resize', fitSheet);
+  visualViewport.addEventListener('scroll', fitSheet);
+}
+document.addEventListener('focusin', e => {
+  if(e.target.closest && e.target.closest('.sheet')) setTimeout(() => { window.scrollTo(0, 0); fitSheet(); }, 50);
+});
 
 /* ---------- start ---------- */
 loadConfig();
