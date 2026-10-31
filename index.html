@@ -220,6 +220,11 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 .fx-prism #swipe::before{inset:-2px;padding:2px}
 .fx-prism .sheet{background:rgba(14,7,30,.72);-webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%)}
 .fx-still,.fx-still *{animation:none!important}
+/* invisible real switches over the buttons, for iOS haptics */
+.hapwrap{position:relative;display:flex;min-width:0}
+.hapwrap > button{flex:1;min-width:0}
+.hapsw{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:.01;z-index:3;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.nohap .hapsw{display:none}
 #toast{
   position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);
   background:#000d;color:#fff;padding:10px 14px;border-radius:12px;font-size:14px;max-width:90vw;
@@ -408,35 +413,15 @@ function toast(msg){
 }
 function setDot(c){ $('#dot').className = 'dot ' + (c || ''); }
 /* Haptics.
-   Android: navigator.vibrate().
-   iOS has no vibrate(), but since iOS 18 flipping a <input type=checkbox switch> plays the
-   system tick. Safari only allows that from a real tap: the moment the finger lifts
-   (pointerup/click), not when it lands. So a press asks for a tick, and the tick plays as
-   the finger lifts. Each tick uses a fresh switch, which is the version known to work. */
-let hapticPending = false;
+   Android: navigator.vibrate() on every press.
+   iOS: Safari only plays its haptic tick when your finger really taps a switch control, so
+   every remote button (and the D-pad) has an invisible switch laid over it. The finger taps
+   the switch, iOS ticks, and the press is passed on to the button underneath.
+   See the "iOS haptic overlays" section further down. */
 const canVibrate = typeof navigator.vibrate === 'function';
-function iosTick(){
-  const label = document.createElement('label');
-  label.setAttribute('aria-hidden', 'true'); label.style.display = 'none';
-  const input = document.createElement('input');
-  input.type = 'checkbox'; input.setAttribute('switch', '');
-  label.appendChild(input); document.head.appendChild(label);
-  try{ label.click(); }catch(e){}
-  label.remove();
-}
-function flushHaptic(){
-  if(!hapticPending) return;
-  hapticPending = false;
-  iosTick();
-}
-document.addEventListener('pointerup', flushHaptic, true);
-document.addEventListener('click', flushHaptic, true);
 function buzz(){
-  if(store.get('roku.haptics', 'on') === 'off') return;
-  if(canVibrate){ try{ navigator.vibrate(document.documentElement.classList.contains('fx-prism') ? [10, 60, 10] : 10); }catch(e){} return; }
-  const ev = window.event;                        // already inside a tap's lift? tick now
-  if(ev && (ev.type === 'click' || ev.type === 'pointerup')){ hapticPending = false; iosTick(); return; }
-  hapticPending = true;                          // otherwise tick when the finger lifts
+  if(!canVibrate || store.get('roku.haptics', 'on') === 'off') return;
+  try{ navigator.vibrate(document.documentElement.classList.contains('fx-prism') ? [10, 60, 10] : 10); }catch(e){}
 }
 
 /* ---------- server calls (kept in order) ---------- */
@@ -1063,7 +1048,7 @@ gear.addEventListener('click', () => {
 $('#animTog').addEventListener('change', e => { store.set('roku.anim', e.target.checked ? 'on' : 'off'); applyTheme(); });
 $('#repRange').addEventListener('input', e => { store.set('roku.repeat', e.target.value); $('#repVal').textContent = repeatFeel().label; buzz(); });
 $('#swRange').addEventListener('input', e => { store.set('roku.swipe', e.target.value); $('#swVal').textContent = swipeFeel().label; buzz(); });
-$('#hapTog').addEventListener('change', e => { store.set('roku.haptics', e.target.checked ? 'on' : 'off'); });
+$('#hapTog').addEventListener('change', e => { store.set('roku.haptics', e.target.checked ? 'on' : 'off'); syncHaptics(); });
 
 async function loadConfig(){
   try{
@@ -1074,51 +1059,33 @@ async function loadConfig(){
   applyTheme();
 }
 
-/* ---------- haptics test screen: open the remote with ?haptest at the end of the address ---------- */
-if(new URLSearchParams(location.search).has('haptest')){
-  // A switch that stays rendered (just invisible), in case iOS only ticks for a switch it can draw
-  const shown = document.createElement('label');
-  shown.style.cssText = 'position:fixed;left:8px;bottom:8px;width:52px;height:32px;opacity:0.01;pointer-events:none;z-index:100';
-  const shownIn = document.createElement('input'); shownIn.type = 'checkbox'; shownIn.setAttribute('switch', '');
-  shown.appendChild(shownIn); document.body.appendChild(shown);
-  const methods = [
-    ['1', 'Hidden switch, on finger lift (current)', 'pointerup', () => iosTick()],
-    ['2', 'Invisible switch, on finger lift', 'pointerup', () => shown.click()],
-    ['3', 'Invisible switch, input clicked, on lift', 'pointerup', () => shownIn.click()],
-    ['4', 'Invisible switch, on click', 'click', () => shown.click()],
-    ['5', 'Invisible switch, on touchend', 'touchend', () => shown.click()],
-    ['6', 'Hidden switch, on click', 'click', () => iosTick()],
-  ];
-  const box = document.createElement('div');
-  box.style.cssText = 'position:fixed;inset:0;z-index:60;background:var(--bg);overflow:auto;padding:calc(env(safe-area-inset-top) + 16px) 16px 24px;display:flex;flex-direction:column;gap:10px';
-  box.innerHTML = '<h3 style="margin:0">Haptics test</h3><p class="small muted" style="margin:0">Tap each button a few times and note which numbers you feel a tick on. The last one is a real switch for comparison.</p>';
-  for(const [n, label, ev, fire] of methods){
-    const b = document.createElement('button');
-    b.style.cssText = 'height:56px;justify-content:flex-start;padding:0 16px;font-size:15px';
-    b.innerHTML = `<b style="width:22px">${n}</b>${label}`;
-    b.addEventListener(ev, () => fire());
-    box.appendChild(b);
-  }
-  // 8 and 9: an invisible real switch laid over the whole button, so the finger itself taps it
-  const overlayTest = (n, label, style) => {
-    const d = document.createElement('div');
-    d.style.cssText = 'position:relative;height:56px;display:flex;align-items:center;padding:0 16px;font-size:15px;border-radius:14px;background:var(--btn);border:1px solid var(--edge);overflow:hidden';
-    d.innerHTML = `<b style="width:22px">${n}</b>${label}`;
-    const sw = document.createElement('input'); sw.type = 'checkbox'; sw.setAttribute('switch', '');
-    sw.style.cssText = style;
-    sw.addEventListener('click', () => { d.style.background = 'var(--btn-hi)'; setTimeout(() => d.style.background = 'var(--btn)', 150); });
-    d.appendChild(sw); box.appendChild(d);
-  };
-  overlayTest('8', 'Invisible switch stretched over button', 'position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0.01;cursor:pointer');
-  overlayTest('9', 'Invisible switch scaled up over button', 'position:absolute;left:50%;top:50%;margin:0;transform:translate(-50%,-50%) scale(8,2.2);opacity:0.01;cursor:pointer');
-  const real = document.createElement('label'); real.className = 'tog';
-  real.innerHTML = '<span><b>7</b>&nbsp; Real switch (tap it)</span><input type="checkbox" switch>';
-  box.appendChild(real);
-  const back = document.createElement('button'); back.textContent = 'Back to the remote';
-  back.addEventListener('click', () => { location.href = location.pathname; });
-  box.appendChild(back);
-  document.body.appendChild(box);
+/* ---------- iOS haptic overlays ---------- */
+function hapticSwitch(){
+  const sw = document.createElement('input');
+  sw.type = 'checkbox'; sw.setAttribute('switch', ''); sw.className = 'hapsw';
+  sw.tabIndex = -1; sw.setAttribute('aria-hidden', 'true');
+  return sw;
 }
+function overlayButton(btn){
+  const wrap = document.createElement('span'); wrap.className = 'hapwrap';
+  btn.parentNode.insertBefore(wrap, btn); wrap.appendChild(btn);
+  const sw = hapticSwitch(); wrap.appendChild(sw);
+  // pass the finger's events on to the real button so all its normal behaviour runs
+  const pass = e => {
+    if(e.type === 'pointerdown') btn.classList.add('on');
+    if(e.type !== 'pointerdown' && e.type !== 'click') btn.classList.remove('on');
+    const Ev = e.type === 'click' ? MouseEvent : PointerEvent;
+    btn.dispatchEvent(new Ev(e.type, { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY,
+      pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: e.isPrimary, button: e.button, buttons: e.buttons }));
+  };
+  ['pointerdown', 'pointerup', 'pointercancel', 'pointerleave', 'click', 'contextmenu'].forEach(t => sw.addEventListener(t, pass));
+}
+if(!canVibrate){
+  document.querySelectorAll('.app button[data-key], .icons button').forEach(overlayButton);
+  pad.appendChild(hapticSwitch());   // the pad is a plain element, so its own handlers see the taps directly
+}
+const syncHaptics = () => document.documentElement.classList.toggle('nohap', store.get('roku.haptics', 'on') === 'off');
+syncHaptics();
 
 /* ---------- start ---------- */
 loadConfig();
