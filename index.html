@@ -256,6 +256,16 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
 .prov button{height:36px;width:auto;padding:0 16px;flex:none;background:var(--ok);border-color:var(--ok-ring);color:#fff}
 .prov.off{opacity:.55}
 .sr-credit{margin:14px 0 0;font-size:11px}
+.chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 8px;padding:2px 16px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:34px;padding:0 14px;border-radius:17px;font-size:14px;white-space:nowrap}
+.chip.sel{background:var(--ok);border-color:var(--ok-ring);color:#fff}
+.chip-gap{flex:1 0 4px}
+#disc{margin-top:10px}
+#discNote{margin:2px 0 8px}
+#discNote:empty{display:none}
+.disc-more{width:100%;margin-top:10px}
+.sr-rank{flex:none;width:22px;text-align:center;font-weight:700;color:var(--muted);font-size:13px}
 .sr-tv{width:100%;margin:10px 0 2px;font-weight:600}
 #srHint{margin:2px 0 0}
 /* search bar stays pinned at the top of its panel */
@@ -407,6 +417,15 @@ input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display
     <div id="srMain">
       <p id="srHint" class="small muted"></p>
       <div id="srResults" class="sr-list"></div>
+      <div id="disc" hidden>
+        <div class="chips" id="discType"><button class="chip" data-type="movie">Movies</button><button class="chip" data-type="tv">TV shows</button>
+          <span class="chip-gap"></span><button class="chip" id="discMine" title="Only titles streaming on apps installed on this Roku">On my apps</button></div>
+        <div class="chips" id="discSorts"></div>
+        <div class="chips" id="discGenres"></div>
+        <div id="discNote" class="small muted"></div>
+        <div id="discList" class="sr-list"></div>
+        <button id="discMore" class="disc-more" hidden>Load more</button>
+      </div>
     </div>
     <div id="srDetail" hidden></div>
     <p id="srCredit" class="small muted sr-credit" hidden>Search by TMDB, streaming info by JustWatch. This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
@@ -798,7 +817,9 @@ function srBack(){
 }
 $('#searchBtn').addEventListener('click', () => {
   if(!showSearchOn() && !state.ip) return toast('No Roku selected');
-  srBack(); openSheet('#searchSheet'); $('#searchQ').focus({ preventScroll: true });
+  srBack(); openSheet('#searchSheet');
+  if(showSearchOn() && !$('#searchQ').value.trim()) showDiscover();   // browse first; tap the bar to type
+  else $('#searchQ').focus({ preventScroll: true });
 });
 $('#searchForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -813,7 +834,8 @@ $('#searchQ').addEventListener('input', () => {        // results update as you 
   clearTimeout(srTimer);
   const q = $('#searchQ').value.trim();
   srBack();                                            // typing again goes back to the results
-  if(!q){ srSeq++; $('#srResults').innerHTML = ''; $('#srScroll').scrollTop = 0; window.scrollTo(0, 0); return; }
+  if(!q){ srSeq++; $('#srResults').innerHTML = ''; $('#srScroll').scrollTop = 0; window.scrollTo(0, 0); showDiscover(); return; }
+  $('#disc').hidden = true;
   srTimer = setTimeout(() => runSearch(q), 350);
 });
 /* Roku's own search screen on the TV: its results link straight into each app */
@@ -822,6 +844,88 @@ function searchOnTv(q){
   buzz(); queue('/api/search', { q });
   toast(`Showing \u201c${q}\u201d on your TV`);
 }
+/* ---------- Discover: browse by category, sorted your way ---------- */
+const SORTS = [['best', '✦ Best'], ['popular', 'Popular'], ['newest', 'Newest'], ['top', 'Top rated']];
+const disc = {
+  type: store.get('disc.type', 'movie') === 'tv' ? 'tv' : 'movie',
+  sort: SORTS.some(x => x[0] === store.get('disc.sort', 'best')) ? store.get('disc.sort', 'best') : 'best',
+  genre: store.get('disc.genre', ''), mine: store.get('disc.mine', '') === '1',
+  page: 0, pages: 1, seq: 0, items: [], genres: {}, providers: {},
+};
+const SORT_NOTES = {
+  best: () => `Released in the last ${cfg.best_window_months || 12} months · highest rated first, newest first on ties`,
+  popular: () => 'Trending right now', newest: () => 'Most recent releases first', top: () => 'Highest rated of all time',
+};
+function chip(text, sel, onClick){
+  const b = document.createElement('button'); b.className = 'chip' + (sel ? ' sel' : ''); b.textContent = text;
+  b.addEventListener('click', () => { buzz(); onClick(); });
+  return b;
+}
+async function genresFor(type){
+  if(!disc.genres[type]){ try{ disc.genres[type] = (await api('/api/tmdb/genres?type=' + type)).genres; }catch(e){ return []; } }
+  return disc.genres[type];
+}
+async function renderDiscChips(){
+  document.querySelectorAll('#discType [data-type]').forEach(b => b.classList.toggle('sel', b.dataset.type === disc.type));
+  $('#discMine').classList.toggle('sel', disc.mine);
+  const sorts = $('#discSorts'); sorts.innerHTML = '';
+  for(const [id, label] of SORTS) sorts.appendChild(chip(label, id === disc.sort, () => { disc.sort = id; store.set('disc.sort', id); reloadDiscover(); }));
+  const genres = await genresFor(disc.type);
+  if(disc.genre && !genres.some(g => String(g.id) === disc.genre)) disc.genre = '';   // movie and TV genres differ
+  const row = $('#discGenres'); row.innerHTML = '';
+  row.appendChild(chip('All', !disc.genre, () => { disc.genre = ''; store.set('disc.genre', ''); reloadDiscover(); }));
+  for(const g of genres) row.appendChild(chip(g.name, String(g.id) === disc.genre, () => { disc.genre = String(g.id); store.set('disc.genre', disc.genre); reloadDiscover(); }));
+  $('#discNote').textContent = SORT_NOTES[disc.sort]();
+}
+document.querySelectorAll('#discType [data-type]').forEach(b => b.addEventListener('click', () => {
+  buzz(); disc.type = b.dataset.type; store.set('disc.type', disc.type); reloadDiscover();
+}));
+$('#discMine').addEventListener('click', () => { buzz(); disc.mine = !disc.mine; store.set('disc.mine', disc.mine ? '1' : ''); reloadDiscover(); });
+async function myProviderIds(){
+  const key = disc.type + '|' + state.ip;
+  if(!disc.providers[key]){
+    const [list, apps] = await Promise.all([api('/api/tmdb/provider-list?type=' + disc.type), installedApps()]);
+    disc.providers[key] = list.providers.filter(p => findApp(p.name, apps)).map(p => p.id);
+  }
+  return disc.providers[key];
+}
+function showDiscover(){
+  $('#disc').hidden = false;
+  if(!disc.page) reloadDiscover(); else renderDiscChips();
+}
+function reloadDiscover(){
+  disc.page = 0; disc.items = []; $('#discList').innerHTML = ''; $('#srScroll').scrollTop = 0;
+  renderDiscChips(); loadDiscover();
+}
+async function loadDiscover(){
+  const seq = ++disc.seq, list = $('#discList'), more = $('#discMore');
+  more.hidden = true;
+  if(!disc.items.length) list.innerHTML = '<p class="muted">Loading…</p>';
+  try{
+    let providers = '';
+    if(disc.mine){
+      if(!state.ip) throw new Error('Pick a Roku first to use On my apps');
+      const ids = await myProviderIds();
+      if(!ids.length) throw new Error('None of the apps on this Roku matched a streaming service');
+      providers = ids.join('|');
+    }
+    const q = new URLSearchParams({ type: disc.type, sort: disc.sort, genre: disc.genre, page: disc.page + 1, providers });
+    const d = await api('/api/tmdb/discover?' + q);
+    if(seq !== disc.seq) return;                  // you changed a filter meanwhile
+    if(!disc.items.length) list.innerHTML = '';
+    const seen = new Set(disc.items.map(r => r.id));
+    for(const r of d.results){
+      if(seen.has(r.id)) continue;
+      disc.items.push(r);
+      list.appendChild(resultRow(r, disc.sort === 'best' || disc.sort === 'top' ? disc.items.length : 0));
+    }
+    disc.page = d.page; disc.pages = d.pages;
+    if(!disc.items.length) list.innerHTML = '<p class="muted">Nothing matches these filters.</p>';
+    more.hidden = disc.page >= disc.pages;
+  }catch(e){ if(seq === disc.seq){ list.innerHTML = `<p class="muted"></p>`; list.firstChild.textContent = e.message; disc.page = 0; } }
+}
+$('#discMore').addEventListener('click', () => { buzz(); loadDiscover(); });
+
 async function runSearch(q){
   const seq = ++srSeq, list = $('#srResults');
   if(!list.children.length) list.innerHTML = '<p class="muted">Searching…</p>';
@@ -839,13 +943,19 @@ function posterImg(path, size, cls){
   return img;
 }
 const kindLabel = r => r.type === 'tv' ? 'TV show' : 'Movie';
-function resultRow(r){
+function whenLabel(r){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r.date || '');
+  if(!m) return r.year || '';
+  return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
+function resultRow(r, rank){
   const b = document.createElement('button'); b.className = 'sr-row';
   const meta = document.createElement('div'); meta.className = 'sr-meta';
   const t = document.createElement('div'); t.className = 'sr-t'; t.textContent = r.title;
   const sub = document.createElement('div'); sub.className = 'sr-sub';
-  sub.textContent = [r.year, kindLabel(r), r.rating ? '★ ' + r.rating : ''].filter(Boolean).join(' · ');
+  sub.textContent = [whenLabel(r), kindLabel(r), r.rating ? '★ ' + r.rating : ''].filter(Boolean).join(' · ');
   meta.append(t, sub);
+  if(rank){ const n = document.createElement('span'); n.className = 'sr-rank'; n.textContent = rank; b.appendChild(n); }
   b.append(posterImg(r.poster, 'w92', 'sr-poster'), meta);
   b.addEventListener('click', () => showDetail(r));
   return b;

@@ -11,10 +11,13 @@
     "    count, size [min, max] px, speed, opacity, and palette = colors for plain symbols (emoji keep their own).",
     "  secret: true keeps a theme out of the picker until it's unlocked in the app.",
     "  effect: 'prism' adds the liquid RGB background, glass buttons and tap bursts (works with any colors).",
-    "tmdb_region: two-letter country code used to show which streaming services carry a title (show search)."
+    "tmdb_region: two-letter country code used to show which streaming services carry a title (show search).",
+    "best_window_months / best_min_votes: the Discover 'Best' sort shows titles released in the last N months, highest rated first (newest first on ties), skipping titles with fewer reviews than best_min_votes (TV uses half)."
   ],
   "theme": "auto",
   "tmdb_region": "US",
+  "best_window_months": 12,
+  "best_min_votes": 40,
   "animations": true,
   "lock_theme": false,
   "themes": {

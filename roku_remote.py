@@ -22,6 +22,7 @@ import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlencode, urlparse
@@ -291,21 +292,80 @@ def tmdb_get(path, params):
     return data
 
 
+def tmdb_item(r, kind):
+    when = r.get("release_date") or r.get("first_air_date") or ""
+    return {
+        "id": r.get("id"), "type": kind,
+        "title": r.get("title") or r.get("name") or "",
+        "date": when, "year": when[:4], "overview": r.get("overview") or "",
+        "poster": r.get("poster_path"), "rating": round(r.get("vote_average") or 0, 1),
+        "votes": r.get("vote_count") or 0,
+    }
+
+
 def tmdb_search(q):
     data = tmdb_get("/search/multi", {"query": q, "include_adult": "false", "language": "en-US", "page": 1})
-    out = []
-    for r in data.get("results", []):
-        kind = r.get("media_type")
-        if kind not in ("movie", "tv"):
-            continue
-        date = r.get("release_date") or r.get("first_air_date") or ""
-        out.append({
-            "id": r.get("id"), "type": kind,
-            "title": r.get("title") or r.get("name") or "",
-            "year": date[:4], "overview": r.get("overview") or "",
-            "poster": r.get("poster_path"), "rating": round(r.get("vote_average") or 0, 1),
-        })
-    return out[:20]
+    return [tmdb_item(r, r["media_type"]) for r in data.get("results", [])
+            if r.get("media_type") in ("movie", "tv")][:20]
+
+
+# ------------------------------------------------------------ Discover (browse)
+DISCOVER_SORTS = ("best", "popular", "newest", "top")
+
+
+def discover_settings():
+    """Best = recent titles (last N months) sorted by rating, newest first on ties."""
+    window, min_votes = 12, 40
+    try:
+        with open(CONFIG, encoding="utf-8") as f:
+            c = json.load(f)
+        window = max(1, min(120, int(c.get("best_window_months", window))))
+        min_votes = max(0, min(5000, int(c.get("best_min_votes", min_votes))))
+    except (OSError, ValueError, TypeError):
+        pass
+    return window, min_votes
+
+
+def tmdb_genres(kind):
+    data = tmdb_get(f"/genre/{kind}/list", {"language": "en-US"})
+    return [{"id": g["id"], "name": g["name"]} for g in data.get("genres", [])]
+
+
+def tmdb_provider_list(kind):
+    _, region = tmdb_settings()
+    data = tmdb_get(f"/watch/providers/{kind}", {"watch_region": region, "language": "en-US"})
+    return [{"id": p.get("provider_id"), "name": p.get("provider_name")} for p in data.get("results", [])]
+
+
+def tmdb_discover(kind, sort, genre, page, providers):
+    _, region = tmdb_settings()
+    today = date.today()
+    when = "primary_release_date" if kind == "movie" else "first_air_date"
+    small = kind == "tv"                      # TV shows get fewer reviews, so need lower bars
+    params = {"include_adult": "false", "language": "en-US", "page": page,
+              f"{when}.lte": today.isoformat()}  # only things already out
+    if genre:
+        params["with_genres"] = genre
+    if providers:                              # "On my apps": streaming on services this Roku has
+        params.update({"with_watch_providers": providers, "watch_region": region,
+                       "with_watch_monetization_types": "flatrate|free|ads"})
+    if sort == "popular":
+        params["sort_by"] = "popularity.desc"
+    elif sort == "newest":
+        params.update({"sort_by": f"{when}.desc", "vote_count.gte": 5 if small else 10})
+    elif sort == "top":
+        params.update({"sort_by": "vote_average.desc", "vote_count.gte": 150 if small else 300})
+    else:                                      # best
+        window, min_votes = discover_settings()
+        params.update({"sort_by": "vote_average.desc",
+                       f"{when}.gte": (today - timedelta(days=round(window * 30.44))).isoformat(),
+                       "vote_count.gte": max(5, min_votes // 2) if small else min_votes})
+    data = tmdb_get(f"/discover/{kind}", params)
+    items = [tmdb_item(r, kind) for r in data.get("results", [])]
+    if sort == "best":                         # highest rated first; same rating -> newest first
+        items.sort(key=lambda r: r["date"], reverse=True)
+        items.sort(key=lambda r: r["rating"], reverse=True)
+    return {"results": items, "page": data.get("page", page), "pages": min(data.get("total_pages") or 1, 500)}
 
 
 def tmdb_providers(kind, tmdb_id):
@@ -372,11 +432,28 @@ class Handler(BaseHTTPRequestHandler):
             }
             return self._send(200, json.dumps(manifest).encode(), "application/manifest+json")
 
-        if url.path in ("/api/tmdb/search", "/api/tmdb/providers"):
+        if url.path in ("/api/tmdb/search", "/api/tmdb/providers", "/api/tmdb/discover",
+                        "/api/tmdb/genres", "/api/tmdb/provider-list"):
             try:
                 if url.path == "/api/tmdb/search":
                     query = q.get("q", [""])[0].strip()[:100]
                     return self._json({"results": tmdb_search(query) if query else []})
+                if url.path in ("/api/tmdb/discover", "/api/tmdb/genres", "/api/tmdb/provider-list"):
+                    kind = q.get("type", ["movie"])[0]
+                    if kind not in ("movie", "tv"):
+                        return self._json({"error": "Bad request"}, 400)
+                    if url.path == "/api/tmdb/genres":
+                        return self._json({"genres": tmdb_genres(kind)})
+                    if url.path == "/api/tmdb/provider-list":
+                        return self._json({"providers": tmdb_provider_list(kind)})
+                    sort = q.get("sort", ["best"])[0]
+                    genre = q.get("genre", [""])[0]
+                    page = q.get("page", ["1"])[0]
+                    providers = q.get("providers", [""])[0]
+                    if (sort not in DISCOVER_SORTS or not re.fullmatch(r"\d{0,6}", genre)
+                            or not re.fullmatch(r"\d{1,3}", page) or not re.fullmatch(r"[\d|]{0,300}", providers)):
+                        return self._json({"error": "Bad request"}, 400)
+                    return self._json(tmdb_discover(kind, sort, genre, max(1, min(500, int(page))), providers))
                 kind, tid = q.get("type", [""])[0], q.get("id", [""])[0]
                 if kind not in ("movie", "tv") or not tid.isdigit():
                     return self._json({"error": "Bad request"}, 400)

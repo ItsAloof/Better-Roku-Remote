@@ -76,6 +76,17 @@ Your computer has to stay awake for the remote to work. If it sleeps, the remote
 
 **Search** finds movies and shows on your phone. Results show posters, ratings and which streaming services carry each title, and tapping **Open** next to a service you have installed opens that app on your Roku. The remote can't start the show itself, because Roku keeps that ability to its own app, so after it opens, use **Keyboard** to search inside the app.
 
+**Discover:** with nothing typed, the Search panel turns into a browser. Pick **Movies** or **TV shows**, a genre, and a sort:
+
+| Sort | What it shows |
+|---|---|
+| ✦ **Best** | Titles released in the last 12 months, highest rated first; on equal ratings the newest comes first. Titles with very few reviews are skipped. |
+| Popular | What's trending right now |
+| Newest | Most recent releases first |
+| Top rated | Highest rated of all time |
+
+**On my apps** limits everything to titles streaming on services installed on the selected Roku. In `config.json`, `best_window_months` (default 12) and `best_min_votes` (default 40, halved for TV) tune the Best sort.
+
 Setup:
 
 1. Get a free API key from [themoviedb.org](https://www.themoviedb.org/settings/api). Either the "API Key" or the "API Read Access Token" works.
