@@ -1074,6 +1074,40 @@ async function loadConfig(){
   applyTheme();
 }
 
+/* ---------- haptics test screen: open the remote with ?haptest at the end of the address ---------- */
+if(new URLSearchParams(location.search).has('haptest')){
+  // A switch that stays rendered (just invisible), in case iOS only ticks for a switch it can draw
+  const shown = document.createElement('label');
+  shown.style.cssText = 'position:fixed;left:8px;bottom:8px;width:52px;height:32px;opacity:0.01;pointer-events:none;z-index:100';
+  const shownIn = document.createElement('input'); shownIn.type = 'checkbox'; shownIn.setAttribute('switch', '');
+  shown.appendChild(shownIn); document.body.appendChild(shown);
+  const methods = [
+    ['1', 'Hidden switch, on finger lift (current)', 'pointerup', () => iosTick()],
+    ['2', 'Invisible switch, on finger lift', 'pointerup', () => shown.click()],
+    ['3', 'Invisible switch, input clicked, on lift', 'pointerup', () => shownIn.click()],
+    ['4', 'Invisible switch, on click', 'click', () => shown.click()],
+    ['5', 'Invisible switch, on touchend', 'touchend', () => shown.click()],
+    ['6', 'Hidden switch, on click', 'click', () => iosTick()],
+  ];
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:0;z-index:60;background:var(--bg);overflow:auto;padding:calc(env(safe-area-inset-top) + 16px) 16px 24px;display:flex;flex-direction:column;gap:10px';
+  box.innerHTML = '<h3 style="margin:0">Haptics test</h3><p class="small muted" style="margin:0">Tap each button a few times and note which numbers you feel a tick on. The last one is a real switch for comparison.</p>';
+  for(const [n, label, ev, fire] of methods){
+    const b = document.createElement('button');
+    b.style.cssText = 'height:56px;justify-content:flex-start;padding:0 16px;font-size:15px';
+    b.innerHTML = `<b style="width:22px">${n}</b>${label}`;
+    b.addEventListener(ev, () => fire());
+    box.appendChild(b);
+  }
+  const real = document.createElement('label'); real.className = 'tog';
+  real.innerHTML = '<span><b>7</b>&nbsp; Real switch (tap it)</span><input type="checkbox" switch>';
+  box.appendChild(real);
+  const back = document.createElement('button'); back.textContent = 'Back to the remote';
+  back.addEventListener('click', () => { location.href = location.pathname; });
+  box.appendChild(back);
+  document.body.appendChild(box);
+}
+
 /* ---------- start ---------- */
 loadConfig();
 setMode(state.mode === 'swipe' ? 'swipe' : 'buttons');
