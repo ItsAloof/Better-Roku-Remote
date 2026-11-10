@@ -72,6 +72,8 @@ A **Raspberry Pi** works well as an always-on home for the remote: it uses very 
 
 Your computer has to stay awake for the remote to work. If it sleeps, the remote is unreachable until it wakes up.
 
+The remote also looks after itself. A small supervisor runs the server, checks every 30 seconds that it still answers, and restarts it within about two minutes if it stops answering or crashes. What happened is written to `server.log` next to the script: starts, restarts, errors, and an "still running" line every hour. Run `python3 roku_remote.py --no-supervise` to start the server without the supervisor, for debugging.
+
 ## Show search
 
 **Search** finds movies and shows on your phone. Results show posters, ratings and which streaming services carry each title, and tapping **Open** next to a service you have installed opens that app on your Roku. The remote can't start the show itself, because Roku keeps that ability to its own app, so after it opens, use **Keyboard** to search inside the app.
@@ -128,6 +130,7 @@ The file is re-read every time the remote opens, so you don't need to restart th
 - **"Can't reach the remote server":** make sure the script is running, and that your phone is on the same network as the computer.
 - **"Roku blocked it" or presses don't work:** check the Control by mobile apps setting above. Also turn off any VPN on the computer.
 - **"Port 8080 is already in use":** the remote is already running, probably in the background from autostart. Nothing else to do.
+- **The remote stopped working after running a long time:** it should restart itself within about two minutes. If it doesn't, look at `server.log` next to the script, which records restarts and errors.
 - **No Rokus found:** tap the device name, then **Add by IP**. You'll find the Roku's IP under **Settings → Network → About**.
 - **Volume does nothing:** volume only works on Roku TVs, or when the TV supports HDMI-CEC.
 

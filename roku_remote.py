@@ -13,9 +13,13 @@ Standard library only. Set PORT=xxxx to use a different port.
 import http.client
 import ipaddress
 import json
+import logging
+import logging.handlers
 import os
 import re
+import platform
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -31,6 +35,7 @@ PORT = int(os.environ.get("PORT", "8080"))
 ECP_PORT = 8060
 HERE = os.path.dirname(os.path.abspath(__file__))
 INDEX = os.path.join(HERE, "index.html")
+LOG_FILE = os.path.join(HERE, "server.log")      # what happened while running in the background
 FAKE_TV = os.path.join(HERE, "fake-roku.html")   # the virtual Roku TV screen (/?fake-roku)
 DESKTOP = os.path.join(HERE, "desktop.html")    # the computer layout (/desktop)
 CONFIG = os.path.join(HERE, "config.json")   # themes + defaults, re-read on every page load
@@ -380,8 +385,16 @@ def tmdb_providers(kind, tmdb_id):
 
 
 # --------------------------------------------------------------- HTTP server
+log = logging.getLogger("roku_remote")
+EXIT_PORT_IN_USE = 3
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "RokuRemote/1.0"
+    # Give up on a connection that goes quiet for a minute (a phone that went to sleep or
+    # left Wi-Fi mid-request). Without this, each one held a thread forever, and over a
+    # day or more they could pile up until the server stopped answering.
+    timeout = 60
 
     def log_message(self, fmt, *args):
         pass
@@ -404,6 +417,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         q = parse_qs(url.query, keep_blank_values=True)
+
+        if url.path == "/api/ping":
+            return self._json({"ok": True})
 
         if url.path in ("/", "/index.html", "/fake-roku", "/desktop"):
             page = (FAKE_TV if (url.path == "/fake-roku" or "fake-roku" in q)
@@ -659,16 +675,42 @@ class Handler(BaseHTTPRequestHandler):
         return self._json({"ok": True})
 
 
+def setup_logging():
+    """server.log next to the script, kept small (about 1.5 MB at most across 3 files)."""
+    try:
+        h = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=500_000, backupCount=2, encoding="utf-8")
+    except OSError:
+        return
+    h.setFormatter(logging.Formatter("%(asctime)s  %(message)s", "%Y-%m-%d %H:%M:%S"))
+    log.addHandler(h)
+    log.setLevel(logging.INFO)
+
+
+def heartbeat():
+    """One line an hour, so the log shows the server was alive and whether threads pile up."""
+    while True:
+        time.sleep(3600)
+        with _devices_lock:
+            n = len(_devices)
+        log.info("still running - %d threads, %d Rokus known", threading.active_count(), n)
+
+
 def main():
+    setup_logging()
     if not os.path.exists(INDEX):
         print("Warning: index.html not found next to this script.")
     if not os.path.exists(CONFIG):
         print("Note: config.json not found - using the built-in default theme.")
+
     class Server(ThreadingHTTPServer):
+        block_on_close = False      # don't keep a list of every request thread (leaked memory on older Pythons)
+
         def handle_error(self, request, client_address):
             # A browser hanging up mid-request is normal (closed tab, reload, phone asleep): stay quiet.
-            if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+            exc = sys.exc_info()[1]
+            if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError)):
                 return
+            log.exception("error handling a request from %s", client_address[0])
             super().handle_error(request, client_address)
 
     try:
@@ -676,8 +718,10 @@ def main():
     except OSError:
         print(f"Port {PORT} is already in use - the remote is probably already running")
         print("(for example in the background from autostart). Nothing else to do.")
-        return
+        sys.exit(EXIT_PORT_IN_USE)
+    log.info("server started on port %d (Python %s, %s)", PORT, platform.python_version(), platform.platform())
     threading.Thread(target=discover, daemon=True).start()   # warm the device list
+    threading.Thread(target=heartbeat, daemon=True).start()
     print("Roku remote is running.")
     print(f"  On your phone, open:  http://{local_ip()}:{PORT}")
     print("  (Phone and this computer must be on the same Wi-Fi.)  Ctrl+C to stop.")
@@ -685,7 +729,87 @@ def main():
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    except Exception:
+        log.exception("server crashed")
+        raise
+
+
+# ------------------------------------------------------------------ supervisor
+# Running `python roku_remote.py` starts a small supervisor that runs the real server as a
+# child process, checks every 30 seconds that it still answers, and restarts it if it
+# stops answering or exits. That way the remote heals itself even when it runs hidden in
+# the background. Use --no-supervise to run the server directly (for debugging).
+HEALTH_EVERY = float(os.environ.get("ROKU_HEALTH_EVERY", "30"))
+
+
+def slog(msg):
+    """The supervisor's own log lines (opened and closed each time so the server can rotate the file)."""
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}  [supervisor] {msg}\n")
+    except OSError:
+        pass
+
+
+def ping(timeout=10):
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=timeout)
+        try:
+            conn.request("GET", "/api/ping")
+            return conn.getresponse().status == 200
+        finally:
+            conn.close()
+    except (OSError, http.client.HTTPException):
+        return False
+
+
+def nice(seconds):
+    m = int(seconds // 60)
+    return f"{m // 1440}d {m // 60 % 24}h {m % 60}m" if m >= 1440 else f"{m // 60}h {m % 60}m" if m >= 60 else f"{int(seconds)}s"
+
+
+def supervise():
+    cmd = [sys.executable, os.path.abspath(__file__)]
+    env = {**os.environ, "ROKU_REMOTE_CHILD": "1"}
+    quick_exits = 0
+    while True:
+        started = time.time()
+        child = subprocess.Popen(cmd, env=env)
+        misses, killed = 0, False
+        try:
+            while child.poll() is None:
+                time.sleep(HEALTH_EVERY)
+                if child.poll() is not None or time.time() - started < 20:
+                    continue
+                if ping():
+                    misses = 0
+                    continue
+                misses += 1
+                slog(f"server didn't answer the health check ({misses}/3)")
+                if misses >= 3:
+                    slog(f"server stopped answering after {nice(time.time() - started)} - restarting it")
+                    child.kill()
+                    child.wait()
+                    killed = True
+        except KeyboardInterrupt:
+            child.terminate()
+            try:
+                child.wait(5)
+            except subprocess.TimeoutExpired:
+                child.kill()
+            return
+        code = child.returncode
+        if code == EXIT_PORT_IN_USE:
+            return                                   # another copy is already running
+        up = time.time() - started
+        if not killed:
+            slog(f"server exited (code {code}) after {nice(up)} - restarting it")
+        quick_exits = quick_exits + 1 if up < 60 else 0
+        time.sleep(min(60, 2 * 2 ** min(quick_exits, 5)))   # back off if it keeps crashing right away
 
 
 if __name__ == "__main__":
-    main()
+    if os.environ.get("ROKU_REMOTE_CHILD") or "--no-supervise" in sys.argv:
+        main()
+    else:
+        supervise()
