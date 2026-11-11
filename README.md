@@ -56,7 +56,7 @@ Opening the remote on a computer automatically shows the **desktop layout** at `
 - Keyboard control: arrow keys move, `Enter` is OK, `Backspace`/`Esc` is Back, `H` is Home, `Space` is Play/Pause, `,` `.` rewind/forward, `-` `+` change volume, `M` mutes, `*` is Options, `/` jumps to search. You can turn these off in Settings.
 - The same themes and animations as the phone, with app tiles that animate in and glow on hover.
 
-Settings, Roku order, names and the default are shared between the phone and desktop layouts. To switch layouts, use the link at the bottom of Settings in either one.
+Settings, Roku order, names, the default Roku and recent apps are saved in each browser, so they're shared between the phone and desktop layouts in the same browser, but each device keeps its own. (On iPhone, Safari and the home-screen app keep separate copies too.) To switch layouts, use the link at the bottom of Settings in either one.
 
 ## Always on (start automatically)
 
